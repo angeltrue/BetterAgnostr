@@ -1,10 +1,11 @@
+const api = globalThis.browser ?? globalThis.chrome;
 const BUILD_KEY = "betterAgnostr.glubBuild.v1";
 const CACHE_MS = 2 * 60 * 1000;
 const MAX_STALE_MS = 6 * 60 * 60 * 1000;
 
 async function readCache() {
   try {
-    const obj = await browser.storage.local.get(BUILD_KEY);
+    const obj = await api.storage.local.get(BUILD_KEY);
     const cached = obj?.[BUILD_KEY];
     if (cached && typeof cached.build === "string") return cached;
   } catch {}
@@ -13,7 +14,7 @@ async function readCache() {
 
 async function writeCache(value) {
   try {
-    await browser.storage.local.set({ [BUILD_KEY]: value });
+    await api.storage.local.set({ [BUILD_KEY]: value });
   } catch {}
 }
 
@@ -63,7 +64,7 @@ async function getGlubBuild({ force = false } = {}) {
   }
 }
 
-browser.runtime.onMessage.addListener((message) => {
+api.runtime.onMessage.addListener((message) => {
   if (!message || typeof message !== "object") return undefined;
   if (message.type === "getGlubBuild") {
     return getGlubBuild({ force: !!message.force }).catch((err) => ({
@@ -78,20 +79,20 @@ browser.runtime.onMessage.addListener((message) => {
   return undefined;
 });
 
-browser.runtime.onInstalled.addListener(() => {
+api.runtime.onInstalled.addListener(() => {
   getGlubBuild({ force: true }).catch(() => {});
   try {
-    browser.alarms.create("betterAgnostr.glubBuild", { periodInMinutes: 10 });
+    api.alarms.create("betterAgnostr.glubBuild", { periodInMinutes: 10 });
   } catch {}
 });
 
-browser.alarms.onAlarm.addListener((alarm) => {
+api.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "betterAgnostr.glubBuild") {
     getGlubBuild({ force: true }).catch(() => {});
   }
 });
 
 // Also refresh on browser startup if an alarm was missed.
-browser.runtime.onStartup.addListener(() => {
+api.runtime.onStartup.addListener(() => {
   getGlubBuild({ force: false }).catch(() => {});
 });

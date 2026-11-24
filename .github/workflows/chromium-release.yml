@@ -1,9 +1,9 @@
-name: Release
+name: Chromium pre-release
 
 on:
   push:
     tags:
-      - "v*"
+      - "v*-chromium.*"
 
 permissions:
   contents: write
@@ -14,32 +14,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Determine version
+      - name: Determine versions
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          ARTIFACT="${TAG%-chromium.*}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
 
       - name: Locate release notes
         id: notes
         run: |
-          TAG="${{ steps.version.outputs.version }}"
-          FILE="release/RELEASE_NOTES-${TAG}.md"
+          FILE="release/RELEASE_NOTES-${{ steps.version.outputs.tag }}.md"
           if [ -f "$FILE" ]; then
             echo "file=$FILE" >> "$GITHUB_OUTPUT"
           else
             echo "file=" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Remove existing release for this tag
+      - name: Remove existing pre-release for this tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release delete "$GITHUB_REF_NAME" --yes || true
 
-      - name: Publish GitHub Release
+      - name: Publish Chromium pre-release
         uses: softprops/action-gh-release@v2
         with:
-          name: Better Agnostr ${{ github.ref_name }}
+          name: Better Agnostr Chromium ${{ steps.version.outputs.artifact }} (pre-release)
           body_path: ${{ steps.notes.outputs.file }}
+          prerelease: true
           files: |
-            release/better-agnostr-${{ steps.version.outputs.version }}.xpi
-            release/better-agnostr-${{ steps.version.outputs.version }}.zip
+            release/better-agnostr-${{ steps.version.outputs.artifact }}-chromium.zip
           fail_on_unmatched_files: true

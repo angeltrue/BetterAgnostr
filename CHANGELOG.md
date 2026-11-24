@@ -2,6 +2,15 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.2.0 — Chromium port (pre-release)
+
+- Added a Chromium Manifest V3 build target.
+- Switched the background script to a Chrome service worker.
+- Added Chrome 148+ namespace and runtime-message compatibility.
+- Added `chrome-extension:` support for bundled font URLs.
+- Packaged a `better-agnostr-1.2.0-chromium.zip` pre-release.
+- Kept the Firefox build on `main`.
+
 ## 1.1.2 — Privacy defaults and context-menu stability
 
 - Moved voice-memo removal into **Settings → Privacy & Trust** and enabled it by default.

@@ -15,7 +15,7 @@ await mkdir(path.join(dist, "fonts"), { recursive: true });
 const common = {
   bundle: true,
   format: "iife",
-  target: ["firefox128"],
+  target: ["chrome148"],
   platform: "browser",
   sourcemap: false,
   legalComments: "none",
@@ -65,13 +65,14 @@ const pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
 const readme = await readFile(path.join(root, "README.md"), "utf8").catch(() => "");
 if (readme) await writeFile(path.join(dist, "README.md"), readme);
 
-const zipName = `better-agnostr-${pkg.version}.zip`;
+const zipName = `better-agnostr-${pkg.version}-chromium.zip`;
 const zipPath = path.join(root, zipName);
 try {
   await rm(zipPath, { force: true });
   execFileSync("zip", ["-qr", zipPath, "."], { cwd: dist });
-  await cp(zipPath, zipPath.replace(/\.zip$/, ".xpi"));
-  console.log(`\nPackaged ${zipName} and ${zipName.replace(/\.zip$/, ".xpi")}`);
+  await mkdir(path.join(root, "release"), { recursive: true });
+  await cp(zipPath, path.join(root, "release", zipName));
+  console.log(`\nPackaged ${zipName} and copied it to release/`);
 } catch (err) {
   console.warn("Could not create zip:", err.message);
 }

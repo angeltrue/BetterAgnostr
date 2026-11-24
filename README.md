@@ -1,15 +1,15 @@
-# 🚨🚨🚨 **UNSIGNED BUILD WARNING** 🚨🚨🚨
+# 🚨🚨🚨 **UNPACKED CHROMIUM PRE-RELEASE** 🚨🚨🚨
 
-## **THE XPI IN THIS REPOSITORY AND ITS RELEASES IS UNSIGNED.**
+## **THIS CHROMIUM BUILD IS NOT IN THE CHROME WEB STORE YET.**
 
 > [!WARNING]
-> **Firefox Release and ESR will refuse to install this extension permanently unless it is signed by Mozilla.**
+> **The ZIP in this repository and its pre-releases is an unpacked Chromium extension, not a store-signed package.**
 >
-> **The files here are for temporary installation, local development, manual review, or AMO signing.**
+> **Load it through Developer mode for testing, local development, or manual review.**
 >
-> **To install permanently in standard Firefox, sign the package through addons.mozilla.org first.**
+> **Normal browser installations should wait for the Chrome Web Store release.**
 >
-> **Never assume an unsigned XPI is safe just because it is attached to a release.**
+> **Never assume an unpacked extension is safe just because it is attached to a release.**
 
 ---
 
@@ -30,7 +30,7 @@
 
 # Better Agnostr
 
-A Firefox extension for **agnostr.com** that adds:
+A Chromium extension for **agnostr.com** that adds:
 
 - a per-message **JSON event viewer** built into the message action bar;
 - a **Glub.chat line/flair studio** that stamps compatible `glub` metadata with the live build stamp;
@@ -47,23 +47,26 @@ A Firefox extension for **agnostr.com** that adds:
 
 Everything runs locally. The extension does not have a server, does not send your keys anywhere, and stores settings in `browser.storage.local`.
 
-## Install (temporary / development)
+## Install (Chromium pre-release)
 
-Firefox release builds only load unsigned add-ons temporarily.
+This branch is the Chromium port. The Firefox build remains on `main`.
 
-1. Run `node build.mjs` in this directory.
-2. Open Firefox → `about:debugging#/runtime/this-firefox`.
-3. Click **Load Temporary Add-on…** and select `dist/manifest.json`.
-4. Open or reload <https://agnostr.com/>.
+1. Run `npm install` and `node build.mjs`.
+2. Open `chrome://extensions` in Chrome, Edge, Brave, Vivaldi, or another Chromium browser.
+3. Enable **Developer mode**.
+4. Click **Load unpacked** and select `dist/`.
+5. Open or reload <https://agnostr.com/>.
+
+The packaged pre-release ZIP is also in `release/`. It is an unpacked extension, not a Chrome Web Store package.
 
 For a reproducible launch with `web-ext`:
 
 ```bash
 npm install
-npx web-ext run --source-dir dist
+npx web-ext run --source-dir dist --target chromium
 ```
 
-The add-on uses `world: "MAIN"` for its page-side hook, which requires Firefox 128 or newer.
+The extension requires **Chromium 148 or newer**; it uses the `browser` namespace and Promise-returning runtime messages available from Chrome 148. `world: "MAIN"` content scripts require Chromium 111+.
 
 ## Using it
 
@@ -205,7 +208,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.2.zip
+node build.mjs       # writes dist/ and better-agnostr-1.2.0-chromium.zip
 ```
 
 Source layout:

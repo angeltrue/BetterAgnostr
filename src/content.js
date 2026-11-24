@@ -773,7 +773,7 @@ function applyTheme() {
 function safeFontUrl(url) {
   const value = String(url || "").trim();
   if (!value) return "";
-  if (!/^(https?:|moz-extension:|data:font)/i.test(value)) return "";
+  if (!/^(https?:|moz-extension:|chrome-extension:|data:font)/i.test(value)) return "";
   return value;
 }
 
@@ -1285,7 +1285,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.2";
+  const version = manifest.version || "1.2.0";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -4527,7 +4527,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.2";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.2.0";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4544,7 +4544,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.2"}`, 
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.2.0"}`, 
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
