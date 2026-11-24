@@ -140,7 +140,7 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 - a custom CSS box;
 - a **Font** picker with bundled IBM Plex Sans, Atkinson Hyperlegible, and Lexend, popular system families, and custom family/URL support.
 
-The app rail is hidden. The **Agnostr Suite** button is available in every workspace header: Chat, Agora, Agmail, and Agwallet, and its popover is positioned next to the button in every workspace. The suite popover no longer carries duplicate Better, Map, or Search utilities. In the Chat profile footer, the redundant native Settings button is hidden and the Better Agnostr sparkle shortcut takes its place. The profile chip still opens Settings.
+The app rail is hidden. The **Agnostr Suite** button is available in every workspace header: Chat, Agora, Agmail, and Agwallet, and its popover is positioned next to the button in every workspace. The suite popover no longer carries duplicate Better, Map, or Search utilities. In the Chat profile footer, a dedicated Settings button sits directly next to the profile chip and opens Agnostr’s native Settings menu. The Better Agnostr sparkle shortcut sits beside it. Agnostr’s own mobile-only footer actions remain hidden.
 
 The toolbar popup has an **Enable Better Agnostr** switch. Turning it off reloads the current Agnostr tab without the extension UI or outgoing-event changes; turning it back on reloads the tab with the extension active.
 

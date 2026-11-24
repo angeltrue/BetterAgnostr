@@ -2828,6 +2828,7 @@ function findNativeSettingsButton() {
     (b) =>
       !b.closest(".ba-composer-bar") &&
       !b.hasAttribute("data-ba-settings-shortcut") &&
+      !b.hasAttribute("data-ba-settings-opener") &&
       !b.hasAttribute("data-ba-suite-better") &&
       /settings/i.test(`${b.getAttribute("aria-label") || ""} ${b.title || ""} ${b.textContent || ""}`),
   );
@@ -3085,18 +3086,41 @@ function ensureHeaderButtons() {
     }
   }
 
-  const footer = document.querySelector(".ag-conv-footer-actions");
-  if (!footer) return;
-  footer.classList.remove("ag-mobile-only");
-  footer.style.removeProperty("display");
-  const nativeSettings = footer.querySelector('button[aria-label="Settings"]');
-  if (nativeSettings) {
-    nativeSettings.classList.remove("ag-mobile-only");
-    nativeSettings.style.removeProperty("display");
-    nativeSettings.removeAttribute("data-ba-hidden-native-settings");
+  ensureFooterControls();
+}
+
+function ensureFooterControls() {
+  const profile = document.querySelector(".ag-profile-bar-btn");
+  if (!profile) return;
+  const profileFooter = profile.closest(".ag-conv-footer");
+  if (!profileFooter) return;
+  const hiddenActions = profileFooter.querySelector(".ag-conv-footer-actions");
+  if (hiddenActions) hiddenActions.style.display = "none";
+  let controls = profileFooter.querySelector(":scope > .ba-footer-controls");
+  if (!controls) {
+    controls = document.createElement("div");
+    controls.className = "ba-footer-controls";
+    profile.after(controls);
   }
-  let shortcut = footer.querySelector("[data-ba-settings-shortcut]");
-  if (state.settings.ui.showButton === false) {
+  let settings = controls.querySelector("[data-ba-settings-opener]");
+  if (!settings) {
+    settings = document.createElement("button");
+    settings.type = "button";
+    settings.className = "ag-circle-btn ag-dock-icon-btn ba-native-settings-btn";
+    settings.setAttribute("data-ba-settings-opener", "1");
+    settings.title = "Settings";
+    settings.setAttribute("aria-label", "Settings");
+    settings.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+    settings.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openAgnostrSettings("Profile");
+    });
+    controls.append(settings);
+  }
+  let shortcut = controls.querySelector("[data-ba-settings-shortcut]");
+  const show = state.settings.ui.showButton !== false;
+  if (!show) {
     shortcut?.remove();
     return;
   }
@@ -3113,9 +3137,11 @@ function ensureHeaderButtons() {
       event.stopPropagation();
       openBetterSettings(state.betterTab || "line");
     });
+    controls.append(shortcut);
   }
-  if (nativeSettings) nativeSettings.after(shortcut);
-  else if (shortcut.parentElement !== footer) footer.append(shortcut);
+  for (const old of document.querySelectorAll("[data-ba-settings-shortcut]")) {
+    if (!controls.contains(old)) old.remove();
+  }
 }
 
 function ensureSuiteButton() {

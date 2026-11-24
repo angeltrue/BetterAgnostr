@@ -1,11 +1,12 @@
 # Better Agnostr 1.0.1 — Settings hotfix
 
-**Agnostr removed Settings access from the profile button, so this hotfix restores an explicit native Settings button.**
+**Agnostr removed Settings access from the profile button and its own footer actions are now mobile-only, so this hotfix adds a dedicated desktop Settings button next to the profile chip.**
 
 ## Fixed
 
-- Restored the native Agnostr **Settings** button in the profile/footer controls.
-- Kept the Better Agnostr sparkle shortcut alongside it.
+- Added a new visible **Settings** button directly next to the profile chip. It opens Agnostr’s native Settings menu.
+- Kept the Better Agnostr sparkle shortcut beside the new Settings button.
+- Agnostr’s own mobile-only footer actions remain hidden on desktop.
 - Restored the Agnostr Suite **Settings** utility as a secondary fallback while keeping duplicate Better, Map, and Search utilities removed.
 
 ## Documentation

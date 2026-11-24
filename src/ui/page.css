@@ -1345,3 +1345,13 @@ html.ba-hide-locate .ba-locate-hidden {
   color: var(--text-primary);
   border-color: var(--border-default);
 }
+
+/* Settings opener next to the profile button. */
+.ba-footer-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+.ba-native-settings-btn { color: var(--text-secondary); }
+.ba-native-settings-btn:hover { color: var(--text-primary); }
