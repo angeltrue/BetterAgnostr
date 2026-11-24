@@ -606,7 +606,8 @@ html.ba-calls-hidden .ag-srv-discord-voice-group,
 html.ba-calls-hidden .ag-srv-discord-voice-users,
 html.ba-calls-hidden button[aria-label^="Start voice call" i],
 html.ba-calls-hidden button[aria-label^="Start video call" i],
-.ba-call-disabled {
+.ba-call-disabled,
+.ag-ctx-item[data-ba-call-disabled="1"] {
   opacity: 0.45 !important;
   cursor: not-allowed !important;
 }

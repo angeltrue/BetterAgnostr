@@ -2,6 +2,15 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.2 — Privacy defaults and context-menu stability
+
+- Moved voice-memo removal into **Settings → Privacy & Trust** and enabled it by default.
+- Enabled **Omit teleport tag** by default, including for existing installations on the previous schema.
+- Fixed geohash-channel right-click menus being blocked or triggering Firefox extension slowdown warnings.
+- Paused heavy page enhancements while a native context menu is open.
+- Limited message actions to actual message context menus.
+- Throttled the Bitchat-to-Chat text rewrite and narrowed its attribute scan.
+
 ## 1.1.1 — Teleport omission, client control, matcha theme
 
 - Fixed teleport-tag omission by removing `t=teleport` case-insensitively and re-checking the final signed frame before it reaches a relay.

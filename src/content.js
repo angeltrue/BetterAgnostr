@@ -99,6 +99,7 @@ const state = {
   richApplied: new WeakMap(),
   betterPeers: new Map(),
   emojiCategory: "smileys",
+  lastBitchatReplace: 0,
   pendingLookups: new Set(),
   enhanceTimer: null,
   saveTimer: null,
@@ -861,7 +862,7 @@ function removeCallMenuItems() {
     const item = label.closest(".ag-ctx-item");
     if (!item) continue;
     item.disabled = true;
-    item.classList.add("ba-call-disabled");
+    item.dataset.baCallDisabled = "1";
     if (calls.hideUi) item.style.display = "none";
   }
 }
@@ -1063,7 +1064,6 @@ function betterGeneralHtml() {
   return `
     <div class="ag-set-group">
       ${baToggle("ui.showButton", "Show Better Agnostr shortcut", "Adds Better Agnostr to the Agnostr Suite")}
-      ${baToggle("ui.showVoiceMemo", "Voice memo button")}
     </div>
     <div class="ag-set-group">
       <span class="ag-set-label">Custom action</span>
@@ -1285,7 +1285,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.1";
+  const version = manifest.version || "1.1.2";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1451,6 +1451,7 @@ function nativePrivacyHtml() {
     <span class="ag-set-label">Better Agnostr</span>
     ${baToggle("privacy.hideLocate", "Hide Locate Me")}
     ${baToggle("privacy.omitTeleport", "Omit teleport tag")}
+    ${baToggle("privacy.removeVoiceMemo", "Remove voice memo")}
     ${baToggle("privacy.stripTracking", "Strip tracking parameters")}
     ${baToggle("privacy.reviewEnabled", "Review before signing")}
     ${baToggle("privacy.calls.disable", "Block calls")}
@@ -3043,7 +3044,13 @@ function scheduleEnhance() {
 
 function replaceBitchatText() {
   if (!document.body) return;
+  const now = Date.now();
+  if (now - (state.lastBitchatReplace || 0) < 900) return;
+  state.lastBitchatReplace = now;
   const blocked = ".ag-msg-rich, .ag-msg-content, .ag-chat-row-preview, .ag-msg-preview, .ag-conv-preview, .ag-composer, textarea, input, pre, code, script, style";
+  const attrSelector = '[title*="Bitchat"], [aria-label*="Bitchat"], [placeholder*="Bitchat"]';
+  const hasAttributeMatch = !!document.querySelector(attrSelector);
+  if (!hasAttributeMatch && !(document.body.textContent || "").includes("Bitchat")) return;
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
@@ -3053,9 +3060,10 @@ function replaceBitchatText() {
     },
   });
   const nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
+  let guard = 0;
+  while (walker.nextNode() && guard++ < 4000) nodes.push(walker.currentNode);
   for (const node of nodes) node.nodeValue = (node.nodeValue || "").replace(/Bitchat/g, "Chat");
-  for (const el of document.querySelectorAll("[title], [aria-label], [placeholder]")) {
+  for (const el of document.querySelectorAll(attrSelector)) {
     if (el.closest(blocked)) continue;
     for (const attr of ["title", "aria-label", "placeholder"]) {
       const value = el.getAttribute(attr);
@@ -3067,6 +3075,12 @@ function replaceBitchatText() {
 
 function enhanceAll() {
   if (!document.body) return;
+  // Native channel/context menus are sensitive to DOM churn. While one is open,
+  // only finish the message-action menu and let the rest wait until it closes.
+  if (document.querySelector(".ag-ctx-menu")) {
+    enhanceContextMenu();
+    return;
+  }
   removeCallMenuItems();
   applyCallButtons();
   hideCallUi();
@@ -3465,11 +3479,11 @@ function ensureComposerEmoji() {
 }
 
 function applyVoiceMemoVisibility() {
-  const show = state.settings.ui.showVoiceMemo !== false;
+  const remove = state.settings.privacy.removeVoiceMemo !== false;
   for (const btn of document.querySelectorAll(
-    '.ag-composer-dock button[aria-label="Record voice memo"], .ag-composer-dock button[title="Record voice memo"]',
+    'button[aria-label="Record voice memo"], button[title="Record voice memo"]',
   )) {
-    btn.style.display = show ? "" : "none";
+    btn.style.display = remove ? "none" : "";
   }
 }
 
@@ -4243,6 +4257,9 @@ function enhanceContextMenu() {
   }
   const target = state.contextTarget;
   if (!target?.mention) return;
+  const labels = [...menu.querySelectorAll(".ag-ctx-item-label")].map((el) => (el.textContent || "").trim().toLowerCase());
+  const messageMenu = labels.some((label) => /^(reply|copy event id|view profile|block peer|mention\b)/.test(label));
+  if (!messageMenu) return;
   const make = (kind, icon, label, title) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -4510,7 +4527,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.1";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.2";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4527,7 +4544,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.1"}`, 
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.2"}`, 
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,

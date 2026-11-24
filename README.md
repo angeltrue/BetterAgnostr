@@ -43,7 +43,7 @@ A Firefox extension for **agnostr.com** that adds:
 - a **categorized emoji picker** with 2,300+ base emoji for the composer;
 - **custom fonts** (three sans and seven serif families bundled, plus popular system families and custom family/URL);
 - a green **Better Agnostr** avatar marker alongside Agnostr's own blue marker;
-- Locate Me removal, teleport-tag control, call-button blocking, and a simplified app shell.
+- Locate Me removal, teleport-tag omission, voice-memo removal, call-button blocking, and a simplified app shell.
 
 Everything runs locally. The extension does not have a server, does not send your keys anywhere, and stores settings in `browser.storage.local`.
 
@@ -112,11 +112,11 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 
 ### Privacy
 
-- **Calls & video:** disables incoming/outgoing call signals, blocks outgoing call events, removes Room Info call buttons, and hides group-call stages, floating call bars, ringing banners, voice-room rows, and call recording pills. Voice memos are unaffected.
+- **Calls & video:** disables incoming/outgoing call signals, blocks outgoing call events, removes Room Info call buttons, and hides group-call stages, floating call bars, ringing banners, voice-room rows, and call recording pills. Voice memos are unaffected by call blocking; the separate **Remove voice memo** privacy setting hides the composer button.
 - **Metadata scrubber:** removes selected tags from every outgoing event (routing tags are always kept), and strips `utm_*`, `fbclid`, `si`, `igshid`, and similar tracking parameters from links.
 - **Review before signing:** holds selected event groups before signing and shows every tag. Check a tag to remove it, then send or cancel. Critical routing tags and the `glub` tag are protected from removal; the `client` tag can be removed.
 - **Locate Me:** hidden by default; toggle in **Settings → Privacy & Trust**.
-- **Teleport:** optionally omit the `t=teleport` tag from outgoing events in **Settings → Privacy & Trust**. The tag is removed before signing and checked again on the final signed frame before it reaches a relay.
+- **Teleport:** omit the `t=teleport` tag from outgoing events in **Settings → Privacy & Trust**. This is enabled by default. The tag is removed before signing and checked again on the final signed frame before it reaches a relay.
 
 ### Settings
 
@@ -126,9 +126,9 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 
 - **line** — template, colours, codes, flair, live preview, rendering toggles;
 - **client** — client tag and per-event policies;
-- **general** — suite-shortcut and voice-memo visibility, composer-panel state, and the custom action default.
+- **general** — suite-shortcut visibility, composer-panel state, and the custom action default.
 
-**Settings → Privacy & Trust** gains a **Better Agnostr** group with Locate Me, teleport, tracking-parameter scrubbing, review-before-signing, call blocking, and tag-removal controls. The native **Broadcast Agnostr client** switch is hidden because the Client tab now owns outgoing client tags.
+**Settings → Privacy & Trust** gains a **Better Agnostr** group with Locate Me, teleport omission, voice-memo removal, tracking-parameter scrubbing, review-before-signing, call blocking, and tag-removal controls. Teleport omission and voice-memo removal are enabled by default. The native **Broadcast Agnostr client** switch is hidden because the Client tab now owns outgoing client tags.
 
 **Settings → Notifications** gains **Better Agnostr sounds** directly below the native sound section: message-chime and UI-click presets, volume, chat/mention/DM/call toggles, UI clicks, and test buttons. The native **Message chimes** switch remains the on/off control for message chimes.
 
@@ -152,7 +152,6 @@ The line preview is a real Agnostr-style row using your default identicon. It re
 
 **Settings → Better Agnostr → general** also has:
 
-- a **Voice memo button** visibility toggle;
 - a compactness/collapse control for the composer formatting panel. The formatting panel is collapsed by default and opens from the small **Aa** button beside the composer.
 
 The composer formatting panel no longer contains the line-editor or last-event shortcuts. It only carries the formatting controls and the colour picker. The composer has a separate emoji button that opens the categorized emoji grid. The grid groups emoji into Smileys, People, Nature, Food, Activities, Travel, Objects, Symbols, and Flags tabs. The category bar is a fixed header and the emoji grid scrolls underneath it without overlapping. The Better Agnostr settings tabs and buttons use the same segmented-control and button styling as native Agnostr.
@@ -206,7 +205,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.1.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.2.zip
 ```
 
 Source layout:

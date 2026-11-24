@@ -7,7 +7,7 @@ export const STORAGE_KEY = "betterAgnostr.settings.v1";
 export const KIND_POLICIES = ["leave", "spoof", "strip"];
 
 export const DEFAULT_SETTINGS = {
-  schema: 3,
+  schema: 4,
   enabled: true,
   studio: {
     enabled: true,
@@ -34,7 +34,8 @@ export const DEFAULT_SETTINGS = {
     stripTags: [],
     stripTracking: true,
     hideLocate: true,
-    omitTeleport: false,
+    omitTeleport: true,
+    removeVoiceMemo: true,
     reviewEnabled: false,
     reviewGroups: ["chat"],
     calls: {
@@ -85,7 +86,6 @@ export const DEFAULT_SETTINGS = {
     firstRun: true,
     panelOpen: false,
     showButton: true,
-    showVoiceMemo: true,
   },
 };
 
@@ -126,10 +126,12 @@ export function mergeSettings(base, patch) {
 export function normalizeSettings(raw) {
   const legacyClient = !raw || typeof raw.schema !== "number" || raw.schema < 2;
   const legacyToolbar = !raw || typeof raw.schema !== "number" || raw.schema < 3;
+  const legacyPrivacy = !raw || typeof raw.schema !== "number" || raw.schema < 4;
   const s = mergeSettings(DEFAULT_SETTINGS, raw || {});
   if (legacyClient && s.client.name === "glub.chat") s.client.name = "BetterAgnostr";
   if (legacyToolbar) s.studio.showComposerToolbar = false;
-  s.schema = 3;
+  if (legacyPrivacy) s.privacy.omitTeleport = true;
+  s.schema = 4;
   s.enabled = s.enabled !== false;
 
   // studio
@@ -157,6 +159,7 @@ export function normalizeSettings(raw) {
   s.privacy.stripTracking = s.privacy.stripTracking !== false;
   s.privacy.hideLocate = s.privacy.hideLocate !== false;
   s.privacy.omitTeleport = s.privacy.omitTeleport === true;
+  s.privacy.removeVoiceMemo = s.privacy.removeVoiceMemo !== false;
   s.privacy.reviewEnabled = s.privacy.reviewEnabled === true;
   if (!Array.isArray(s.privacy.reviewGroups)) s.privacy.reviewGroups = [];
   s.privacy.reviewGroups = [...new Set(s.privacy.reviewGroups.filter((g) => ["chat", "note", "reaction", "dm", "profile", "other"].includes(g)))];
@@ -207,7 +210,7 @@ export function normalizeSettings(raw) {
   s.ui.firstRun = s.ui.firstRun === true;
   s.ui.panelOpen = s.ui.panelOpen === true;
   s.ui.showButton = s.ui.showButton !== false;
-  s.ui.showVoiceMemo = s.ui.showVoiceMemo !== false;
+  delete s.ui.showVoiceMemo;
   if (!["line", "client", "general"].includes(s.ui.betterTab)) s.ui.betterTab = "line";
 
   return s;
