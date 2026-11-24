@@ -1,3 +1,18 @@
+# 🚨🚨🚨 **AI USAGE WARNING** 🚨🚨🚨
+
+## **THIS PROJECT WAS BUILT WITH GENERATIVE AI ASSISTANCE.**
+
+> [!CAUTION]
+> **AI-generated code can be wrong, insecure, incomplete, or entirely fabricated.**
+>
+> **Do not install or trust this extension with keys, messages, or money without reviewing the source yourself.**
+>
+> **If you do not want AI-generated software, do not use this project.**
+>
+> **No warranty. Use at your own risk.**
+
+---
+
 # Better Agnostr
 
 A Firefox extension for **agnostr.com** that adds:
