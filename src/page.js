@@ -29,8 +29,8 @@ import {
   if (window.__betterAgnostrPage) return;
   Object.defineProperty(window, "__betterAgnostrPage", { value: true, configurable: false });
 
-  const MAX_EVENTS = 4000;
-  const MAX_LOGS = 600;
+  const MAX_EVENTS = 2000;
+  const MAX_LOGS = 300;
   const state = {
     token: null,
     configReady: false,
@@ -161,7 +161,7 @@ import {
       state.token = data.token || state.token;
       setConfig(parseSettingsPayload(data.payload?.settings));
       publishStatus();
-      post("ready", { version: "1.1.3" });
+      post("ready", { version: "1.1.4" });
       start();
       return;
     }

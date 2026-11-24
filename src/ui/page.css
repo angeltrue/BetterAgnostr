@@ -756,7 +756,9 @@ html.ba-calls-hidden .ag-ctx-item:has(.ag-ctx-item-label) {
 .ba-suite-trigger:hover {
   color: var(--accent);
 }
-html.ba-hide-locate .ba-locate-hidden {
+html.ba-hide-locate .ba-locate-hidden,
+html.ba-hide-locate button[aria-label^="Locate" i],
+html.ba-hide-locate button[title^="Locate" i] {
   display: none !important;
 }
 .ba-suite-better {
@@ -1358,9 +1360,23 @@ button.ag-circle-btn.ba-public-chat-btn:hover {
 button.ag-circle-btn.ba-public-chat-btn svg { flex: 0 0 auto; }
 
 
-/* Better Agnostr lives in the Agnostr Suite footer and keeps native spacing. */
-.ag-suite-footer.ba-suite-footer-dynamic {
+/* Normalize the native suite before its first paint so old Map/Search
+   utilities and the Bitchat label never flash. */
+.ag-suite-footer {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+.ag-suite-footer .ag-suite-util-btn:has(svg[class*="lucide-map"]),
+.ag-suite-footer .ag-suite-util-btn:has(svg[class*="lucide-search"]) {
+  display: none !important;
+}
+.ag-suite-card:has(svg[class*="lucide-waves"]) .ag-suite-card-name {
+  font-size: 0 !important;
+}
+.ag-suite-card:has(svg[class*="lucide-waves"]) .ag-suite-card-name::after {
+  content: "Chat";
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
 }
 .ba-suite-better {
   min-width: 0;
