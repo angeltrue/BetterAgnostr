@@ -140,7 +140,7 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 - a custom CSS box;
 - a **Font** picker with bundled IBM Plex Sans, Atkinson Hyperlegible, and Lexend, popular system families, and custom family/URL support.
 
-The app rail is hidden. The **Agnostr Suite** button is available in every workspace header: Chat, Agora, Agmail, and Agwallet, and its popover is positioned next to the button in every workspace. The suite popover no longer carries duplicate Better, Map, or Search utilities. In the Chat profile footer, a dedicated Settings button sits directly next to the profile chip and opens Agnostr’s native Settings menu. The Better Agnostr sparkle shortcut sits beside it. Agnostr’s own mobile-only footer actions remain hidden.
+The app rail is hidden. The **Agnostr Suite** button is available in every workspace header: Chat, Agora, Agmail, and Agwallet, and its popover is positioned next to the button in every workspace. The suite popover no longer carries duplicate Better, Map, or Search utilities. Group conversations show a **Public chat** button in the conversation header, and the suite’s **Chat** card also leaves a group and returns to public chat, so hiding the rail never traps you in a group. In the Chat profile footer, a dedicated Settings button sits directly next to the profile chip and opens Agnostr’s native Settings menu. The Better Agnostr sparkle shortcut sits beside it. Agnostr’s own mobile-only footer actions remain hidden.
 
 The toolbar popup has an **Enable Better Agnostr** switch. Turning it off reloads the current Agnostr tab without the extension UI or outgoing-event changes; turning it back on reloads the tab with the extension active.
 
@@ -206,7 +206,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.0.1.zip
+node build.mjs       # writes dist/ and better-agnostr-1.0.2.zip
 ```
 
 Source layout:

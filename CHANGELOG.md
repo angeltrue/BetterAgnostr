@@ -2,6 +2,16 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.0.2 — Group navigation & About links hotfix
+
+- Added a visible **Public chat** button to group conversations. It returns to Agnostr’s public Bitchat/geohash chat.
+- Made the Agnostr Suite **Chat** card leave a group and return to public chat instead of doing nothing.
+- Kept the Better Agnostr Suite control available in group conversations.
+- Fixed **Settings → About** links so they open on the first click.
+- Fixed the About **Angel** profile link so one click opens the native peer profile.
+- Stopped the About pane from being rebuilt while open, which swallowed clicks.
+- Added `noopener noreferrer` to external About links.
+
 ## 1.0.1 — Hotfix
 
 - Added a dedicated visible Settings button directly next to the profile chip. It opens Agnostr’s native Settings menu.

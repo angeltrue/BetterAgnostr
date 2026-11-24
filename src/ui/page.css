@@ -1355,3 +1355,26 @@ html.ba-hide-locate .ba-locate-hidden {
 }
 .ba-native-settings-btn { color: var(--text-secondary); }
 .ba-native-settings-btn:hover { color: var(--text-primary); }
+
+
+/* Return to the public Bitchat/geohash chat from a group conversation. */
+button.ag-circle-btn.ba-public-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+button.ag-circle-btn.ba-public-chat-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+button.ag-circle-btn.ba-public-chat-btn svg { flex: 0 0 auto; }

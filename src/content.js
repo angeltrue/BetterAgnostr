@@ -1267,7 +1267,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.0.1";
+  const version = manifest.version || "1.0.2";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1279,15 +1279,54 @@ function aboutPaneHtml() {
       <div class="ba-about-credit">
         <span class="ba-about-credit-name">Agnostr</span>
         <span class="ba-about-credit-line">by hinsley</span>
-        <a href="https://github.com/hinsley/Agnostr" target="_blank" rel="noreferrer">github.com/hinsley/Agnostr</a>
+        <a href="https://github.com/hinsley/Agnostr" target="_blank" rel="noopener noreferrer">github.com/hinsley/Agnostr</a>
       </div>
       <div class="ba-about-credit">
         <span class="ba-about-credit-name">Better Agnostr</span>
         <span class="ba-about-credit-line">by <a class="ba-about-angel" href="#dm=npub1t9kl0mq3f8pesupc9nqndpq389af4czsk7nnpvr5g6kg9hyenxvssjs0yk" data-ba-angel-link data-npub="npub1t9kl0mq3f8pesupc9nqndpq389af4czsk7nnpvr5g6kg9hyenxvssjs0yk">Angel</a></span>
-        <a href="https://github.com/angeltrue/BetterAgnostr" target="_blank" rel="noreferrer">github.com/angeltrue/BetterAgnostr</a>
+        <a href="https://github.com/angeltrue/BetterAgnostr" target="_blank" rel="noopener noreferrer">github.com/angeltrue/BetterAgnostr</a>
       </div>
     </div>
   </div>`;
+}
+
+function openExternalLink(href) {
+  const link = document.createElement("a");
+  link.href = href;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function bindAboutLinks(overlay) {
+  if (overlay.dataset.baLinksBound === "1") return;
+  overlay.dataset.baLinksBound = "1";
+  overlay.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const link = target.closest("a[href]");
+    if (!link || !overlay.contains(link)) return;
+    const npub = link.getAttribute("data-npub");
+    if (npub) {
+      event.preventDefault();
+      event.stopPropagation();
+      openProfileByNpub(npub, "Angel");
+      return;
+    }
+    let url;
+    try {
+      url = new URL(link.getAttribute("href"), location.href);
+    } catch {
+      return;
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") return;
+    event.preventDefault();
+    event.stopPropagation();
+    openExternalLink(url.href);
+  }, true);
 }
 
 function renderAboutPane(modal) {
@@ -1300,7 +1339,13 @@ function renderAboutPane(modal) {
     overlay.setAttribute("data-ba-about-overlay", "1");
     body.appendChild(overlay);
   }
-  overlay.innerHTML = aboutPaneHtml();
+  bindAboutLinks(overlay);
+  const manifest = api.runtime.getManifest?.() || {};
+  const signature = `${manifest.version || ""}|${agnostrBuildId()}`;
+  if (overlay.dataset.baAboutSignature !== signature || !overlay.querySelector(".ba-about-pane")) {
+    overlay.innerHTML = aboutPaneHtml();
+    overlay.dataset.baAboutSignature = signature;
+  }
   overlay.hidden = false;
   modal.classList.add("ba-about-active");
   modal.classList.remove("ba-better-active");
@@ -3050,14 +3095,32 @@ function scheduleSuitePosition() {
   window.setTimeout(positionSuitePopover, 220);
 }
 
+function isGroupChatView() {
+  const avatar = document.querySelector(".ag-header .ag-header-avatar.server");
+  return avatar instanceof HTMLElement && avatar.getClientRects().length > 0;
+}
+
+function returnToPublicChat() {
+  const railChat = document.querySelector(".ag-rail-bitchat");
+  if (!(railChat instanceof HTMLElement)) return false;
+  railChat.click();
+  return true;
+}
+
 function ensureHeaderButtons() {
   const visible = (el) => el instanceof HTMLElement && el.getClientRects().length > 0;
   const workspace = document.querySelector(".ag-app")?.dataset.workspace || "";
+  const groupView = isGroupChatView();
+  if (!groupView) {
+    for (const old of document.querySelectorAll("[data-ba-public-chat]")) old.remove();
+  }
   let target = null;
-  if (workspace === "agora") target = document.querySelector(".ag-agora-header-actions");
+  if (groupView) {
+    target = [...document.querySelectorAll(".ag-header-actions")].find(visible) || null;
+  } else if (workspace === "agora") target = document.querySelector(".ag-agora-header-actions");
   else if (workspace === "mail") target = document.querySelector(".ag-amail-top-actions");
   else if (workspace === "wallet") target = document.querySelector(".ag-wallet-stage-header");
-  if (!visible(target)) {
+  if (!visible(target) && !groupView) {
     for (const selector of [".ag-conv-header-actions", ".ag-agora-header-actions", ".ag-amail-top-actions", ".ag-wallet-stage-header"]) {
       target = [...document.querySelectorAll(selector)].find(visible) || null;
       if (target) break;
@@ -3083,6 +3146,23 @@ function ensureHeaderButtons() {
       });
       if (target.matches(".ag-wallet-stage-header, .ag-amail-top-actions")) target.append(suite);
       else target.prepend(suite);
+    }
+    if (groupView && !target.querySelector("[data-ba-public-chat]")) {
+      const back = document.createElement("button");
+      back.type = "button";
+      back.className = "ag-circle-btn ba-public-chat-btn";
+      back.setAttribute("data-ba-public-chat", "1");
+      back.title = "Back to public chat";
+      back.setAttribute("aria-label", "Back to public chat");
+      back.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg><span>Public chat</span>';
+      back.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!returnToPublicChat()) {
+          toast("warning", "Public chat unavailable", "Open the Agnostr Suite and choose Chat.");
+        }
+      });
+      target.prepend(back);
     }
   }
 
@@ -4249,6 +4329,20 @@ function sendCustomAction() {
   if (sendComposerText(body)) closePanel();
 }
 
+document.addEventListener(
+  "click",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const card = target.closest(".ag-suite-card");
+    if (!card) return;
+    const name = card.querySelector(".ag-suite-card-name")?.textContent?.trim().toLowerCase();
+    if (name !== "chat" || !isGroupChatView()) return;
+    window.setTimeout(() => returnToPublicChat(), 0);
+  },
+  true,
+);
+
 document.addEventListener("contextmenu", captureContextTarget, true);
 document.addEventListener(
   "click",
@@ -4332,7 +4426,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.0.1";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.0.2";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4349,7 +4443,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.0.1"}`, 
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.0.2"}`, 
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
