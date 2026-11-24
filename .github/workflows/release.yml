@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate release notes
+        id: notes
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          FILE="release/RELEASE_NOTES-${TAG}.md"
+          if [ -f "$FILE" ]; then
+            echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          else
+            echo "file=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Better Agnostr ${{ github.ref_name }}
+          body_path: ${{ steps.notes.outputs.file }}
+          files: |
+            release/better-agnostr-*.xpi
+            release/better-agnostr-*.zip
+          fail_on_unmatched_files: true

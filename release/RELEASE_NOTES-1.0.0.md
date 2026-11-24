@@ -1,6 +1,6 @@
 # Better Agnostr 1.0.0
 
-A Firefox extension for [agnostr.com](https://agnostr.com/) that adds a message JSON viewer, Glub line/flair tooling, client spoofing, privacy controls, call blocking, retro sounds, custom fonts, categorized emoji pickers, BetterAgnostr client marking, and more.
+A Firefox extension for [agnostr.com](https://agnostr.com/) published at [github.com/angeltrue/BetterAgnostr](https://github.com/angeltrue/BetterAgnostr) that adds a message JSON viewer, Glub line/flair tooling, client spoofing, privacy controls, call blocking, retro sounds, custom fonts, categorized emoji pickers, BetterAgnostr client marking, and more.
 
 ## Downloads
 

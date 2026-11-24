@@ -1284,7 +1284,7 @@ function aboutPaneHtml() {
       <div class="ba-about-credit">
         <span class="ba-about-credit-name">Better Agnostr</span>
         <span class="ba-about-credit-line">by <a class="ba-about-angel" href="#dm=npub1t9kl0mq3f8pesupc9nqndpq389af4czsk7nnpvr5g6kg9hyenxvssjs0yk" data-ba-angel-link data-npub="npub1t9kl0mq3f8pesupc9nqndpq389af4czsk7nnpvr5g6kg9hyenxvssjs0yk">Angel</a></span>
-        <a href="https://gitworkshop.dev/" target="_blank" rel="noreferrer">gitworkshop</a>
+        <a href="https://github.com/angeltrue/BetterAgnostr" target="_blank" rel="noreferrer">github.com/angeltrue/BetterAgnostr</a>
       </div>
     </div>
   </div>`;

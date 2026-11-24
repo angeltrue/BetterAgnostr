@@ -102,7 +102,7 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 
 **Settings → Notifications** gains **Better Agnostr sounds** directly below the native sound section: message-chime and UI-click presets, volume, chat/mention/DM/call toggles, UI clicks, and test buttons. The native **Message chimes** switch remains the on/off control for message chimes.
 
-**Settings → About** is the last entry in the native navigation. It shows the Agnostr logo, an **Agnostr** label, the current web build, `with Better Agnostr version 1.0.0`, Agnostr credits (hinsley + GitHub), and Better Agnostr credits (Angel + a gitworkshop placeholder link). Angel is linked to the profile for `npub1t9kl0mq3f8pesupc9nqndpq389af4czsk7nnpvr5g6kg9hyenxvssjs0yk` and opens that key in Agnostr’s own peer profile modal, using the same opener as clicking an avatar in chat.
+**Settings → About** is the last entry in the native navigation. It shows the Agnostr logo, an **Agnostr** label, the current web build, `with Better Agnostr version 1.0.0`, Agnostr credits (hinsley + GitHub), and Better Agnostr credits (Angel + [github.com/angeltrue/BetterAgnostr](https://github.com/angeltrue/BetterAgnostr)). Angel is linked to the profile for `npub1t9kl0mq3f8pesupc9nqndpq389af4czsk7nnpvr5g6kg9hyenxvssjs0yk` and opens that key in Agnostr’s own peer profile modal, using the same opener as clicking an avatar in chat.
 
 **Settings → Appearance** includes:
 
