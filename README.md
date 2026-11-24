@@ -42,7 +42,7 @@ A Firefox extension for **agnostr.com** that adds:
 - **Hug / Slap / Custom action** items in the message right-click menu;
 - a **categorized emoji picker** with 2,300+ base emoji for the composer;
 - **custom fonts** (three sans and seven serif families bundled, plus popular system families and custom family/URL);
-- a green **Better Agnostr** avatar marker alongside Agnostr's own blue marker;
+- a small **BA** plaque next to Better Agnostr usernames; client borders remain Agnostr's own;
 - Locate Me removal, teleport-tag omission, voice-memo removal, call-button blocking, and a simplified app shell.
 
 Everything runs locally. The extension does not have a server, does not send your keys anywhere, and stores settings in `browser.storage.local`.
@@ -116,7 +116,7 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 - **Metadata scrubber:** removes selected tags from every outgoing event (routing tags are always kept), and strips `utm_*`, `fbclid`, `si`, `igshid`, and similar tracking parameters from links.
 - **Review before signing:** holds selected event groups before signing and shows every tag. Check a tag to remove it, then send or cancel. Critical routing tags and the `glub` tag are protected from removal; the `client` tag can be removed.
 - **Locate Me:** hidden by default; toggle in **Settings → Privacy & Trust**.
-- **Teleport:** omit the `t=teleport` tag from outgoing events in **Settings → Privacy & Trust**. This is enabled by default. The tag is removed before signing and checked again on the final signed frame before it reaches a relay.
+- **Teleport:** omit the `t=teleport` tag from outgoing events in **Settings → Privacy & Trust**. This is enabled by default. The tag is removed before signing and checked again on the final signed frame before it reaches a relay. When omission is on, the visual TELEPORT badge on your own profile is hidden as well.
 
 ### Settings
 
@@ -145,7 +145,7 @@ The native app rail is hidden. The **Agnostr Suite** button is available in ever
 The toolbar popup has an **Enable Better Agnostr** switch. Turning it off reloads the current Agnostr tab without the extension UI or outgoing-event changes; turning it back on reloads the tab with the extension active.
 
 
-Better Agnostr users are marked with the same avatar-border mechanism Agnostr uses for its own users, but in green: messages from a `BetterAgnostr` client tag get a green avatar border and matching People-list marker.
+Better Agnostr users are marked with a small **BA** plaque next to their username in messages, the People list, the quick profile, and the peer profile. Client avatar borders are now owned by Agnostr itself; the extension no longer adds a green border.
 
 The line preview is a real Agnostr-style row using your default identicon. It renders the Neuromancer “sky above the port” line through the template, flair palette, rainbow, and obfuscation pipeline. The old test-message input and build/native debug lines are gone. The Bitcoin flair now draws its circuit board and coin with a visible surge, and the stars flair keeps shooting stars inside the message line.
 
@@ -158,7 +158,7 @@ The composer formatting panel no longer contains the line-editor or last-event s
 
 
 
-Message flair effects are painted into a row-sized clipping layer, so stars, embers, circuits, and other effects cannot spill into adjacent messages. The hover action bar remains unclipped above the row. Room Info call buttons are removed entirely when call blocking is enabled.
+Message flair effects are painted into a row-sized clipping layer, so stars, embers, circuits, and other effects cannot spill into adjacent messages. The hover action bar remains unclipped above the row and is cleared when the pointer leaves, so it cannot remain stuck. Room Info call buttons are removed entirely when call blocking is enabled.
 
 The event viewer and custom action dialog use the client’s native sheet styling, with outlined controls, native typography, and segmented viewer tabs. The viewer’s Glub tab renders the exact same preview component as the settings preview: same avatar, name/tag, line, flair, and clipping.
 
@@ -205,7 +205,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.2.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.3.zip
 ```
 
 Source layout:

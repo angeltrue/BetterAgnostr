@@ -122,18 +122,28 @@
   --ba-rich: 1;
 }
 
-/* Better Agnostr users use the same avatar-border marker as Agnostr users,
-   in green instead of blue. */
-.ag-avatar-better,
-.ag-users-avatar.ag-avatar-better,
-.ag-stream-avatar.ag-avatar-better,
-.ag-profile-avatar.ag-avatar-better,
-.ag-header-avatar-img.ag-avatar-better,
-.ag-sheet-avatar.ag-avatar-better,
-.ag-sheet-hero-avatar.ag-avatar-better {
-  box-sizing: border-box;
-  border: 2px solid #22c55e !important;
+/* Better Agnostr users get a small plaque next to their name. Client
+   identification borders are owned by Agnostr itself. */
+.ba-better-name::after {
+  content: "BA";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 15px;
+  padding: 0 4px;
+  margin-left: 4px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border-default));
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: 700 8.5px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  text-decoration: none;
+  pointer-events: none;
 }
+.ag-msg-head .ba-better-name::after { transform: translateY(-1px); }
+.ag-peer-modal-name.ba-better-name::after { margin-left: 6px; }
 
 /* --- line template colours inside Agnostr rows --------------------------- */
 .ag-msg-row .ag-msg-author.ba-line-name-color {

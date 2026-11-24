@@ -1285,7 +1285,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.2";
+  const version = manifest.version || "1.1.3";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -3093,6 +3093,7 @@ function enhanceAll() {
   decorateRows();
   enhanceContextMenu();
   markBetterClients();
+  hideSelfTeleportBadges();
   replaceBitchatText();
   if (document.querySelector(".ag-suite-popover")) positionSuitePopover();
 }
@@ -3564,6 +3565,8 @@ function ensureRowButtons(row, id) {
   button.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
+    button.blur();
+    clearStuckHoverMenus(null);
     openViewer(id, "json");
   });
   if (actions) actions.prepend(button);
@@ -3580,39 +3583,107 @@ function isBetterClient(ev) {
   return /^(betteragnostr|better-agnostr|better agnostr)$/i.test(client);
 }
 
-function markRowAvatar(row, better) {
-  if (!(row instanceof HTMLElement)) return;
-  row.classList.toggle("ba-better-client", better);
-  for (const img of row.querySelectorAll(".ag-stream-avatar, .ag-msg-avatar-btn img, .ag-profile-avatar")) {
-    img.classList.toggle("ag-avatar-better", better);
+function ownBetterClient() {
+  return (
+    state.settings.client.name.trim().toLowerCase() === "betteragnostr" &&
+    state.settings.client.policies.chat === "spoof"
+  );
+}
+
+function setBetterName(el, show) {
+  if (el instanceof HTMLElement) el.classList.toggle("ba-better-name", !!show);
+}
+
+function knownBetterHandle(handle) {
+  const value = String(handle || "").trim().toLowerCase();
+  if (!value) return false;
+  for (const known of state.betterPeers.values()) {
+    if (known.toLowerCase() === value) return true;
   }
+  return false;
+}
+
+function markRowClientPlaque(row, better) {
+  if (!(row instanceof HTMLElement)) return;
+  setBetterName(row.querySelector(".ag-msg-author"), better);
 }
 
 function markBetterClients() {
   const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
-  const ownBetter =
-    state.settings.client.name.trim().toLowerCase() === "betteragnostr" &&
-    state.settings.client.policies.chat === "spoof";
+  const ownBetter = ownBetterClient();
   for (const row of document.querySelectorAll(".ag-users-row")) {
     const handle = row.querySelector(".ag-users-name")?.textContent?.trim().toLowerCase() || "";
-    const known = handle && [...state.betterPeers.values()].includes(handle);
-    const own = handle.includes(`#${ownPubkey.slice(-4)}`);
-    const better = (known || (own && ownBetter));
-    for (const img of row.querySelectorAll(".ag-users-avatar, img")) img.classList.toggle("ag-avatar-better", better);
+    const own = !!ownPubkey && handle.endsWith(`#${ownPubkey.slice(-4)}`);
+    const better = knownBetterHandle(handle) || (own && ownBetter);
+    setBetterName(row.querySelector(".ag-users-name"), better);
   }
-  if (ownBetter) {
-    for (const img of document.querySelectorAll(".ag-conv-footer .ag-profile-avatar, .ag-set-profile-hero .ag-set-avatar-lg")) {
-      img.classList.add("ag-avatar-better");
+  for (const pop of document.querySelectorAll(".ag-quick-profile-popover")) {
+    setBetterName(pop.querySelector(".ag-qp-display-name"), ownBetter);
+  }
+  for (const modal of document.querySelectorAll(".ag-peer-modal")) {
+    const badges = modal.querySelector(".ag-peer-modal-badges");
+    const isSelf = [...(badges?.querySelectorAll(".ag-badge") || [])].some(
+      (badge) => badge.textContent?.trim().toLowerCase() === "you",
+    );
+    const nameEl = modal.querySelector(".ag-peer-modal-name");
+    const label = (nameEl?.textContent || "").replace(/\s+/g, "").toLowerCase();
+    const better = (isSelf && ownBetter) || knownBetterHandle(label);
+    setBetterName(nameEl, better);
+  }
+  for (const title of document.querySelectorAll(".ag-sheet-hero-title")) {
+    const label = (title.textContent || "").replace(/\s+/g, "").toLowerCase();
+    const better = knownBetterHandle(label) || (!!ownPubkey && label.includes(ownPubkey.slice(-4)) && ownBetter);
+    setBetterName(title, better);
+  }
+  for (const old of document.querySelectorAll(".ag-avatar-better")) old.classList.remove("ag-avatar-better");
+}
+
+function hideSelfTeleportBadges() {
+  for (const modal of document.querySelectorAll(".ag-peer-modal")) {
+    const badges = modal.querySelector(".ag-peer-modal-badges");
+    if (!badges) continue;
+    const isSelf = [...badges.querySelectorAll(".ag-badge")].some(
+      (badge) => badge.textContent?.trim().toLowerCase() === "you",
+    );
+    for (const badge of badges.querySelectorAll(".ag-badge")) {
+      if (badge.textContent?.trim().toLowerCase() !== "teleport") continue;
+      if (isSelf && state.settings.privacy.omitTeleport) {
+        badge.dataset.baTeleportHidden = "1";
+        badge.style.display = "none";
+      } else if (badge.dataset.baTeleportHidden === "1") {
+        badge.style.removeProperty("display");
+        delete badge.dataset.baTeleportHidden;
+      }
     }
+  }
+}
+
+function clearStuckHoverMenus(hoveredRow = null) {
+  if (document.querySelector(".ag-ctx-menu, .ag-rpicker, .ag-emoji-popover")) return;
+  for (const row of document.querySelectorAll(".ag-msg-row.actions-open")) {
+    if (row !== hoveredRow) row.classList.remove("actions-open");
+  }
+  for (const actions of document.querySelectorAll(".ag-msg-actions.picker-open")) {
+    if (!hoveredRow || !hoveredRow.contains(actions)) actions.classList.remove("picker-open");
+  }
+  const active = document.activeElement;
+  if (
+    active instanceof HTMLElement &&
+    active.closest(".ag-msg-actions, .ba-row-json-btn") &&
+    (!hoveredRow || !hoveredRow.contains(active))
+  ) {
+    active.blur();
   }
 }
 
 function decorateRow(row, ev) {
   const meta = parseGlubMeta(ev.tags);
   const hasGlub = !!(meta.rich || meta.fmt || meta.flair || meta.v) || getTagValue(ev.tags, "client")?.toLowerCase() === "glub.chat";
-  const better = isBetterClient(ev);
+  const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
+  const ownMessage = !!ev.pubkey && String(ev.pubkey).toLowerCase() === ownPubkey;
+  const better = isBetterClient(ev) || (ownMessage && ownBetterClient());
   if (better && ev.pubkey) state.betterPeers.set(ev.pubkey.toLowerCase(), eventHandle(ev));
-  markRowAvatar(row, better);
+  markRowClientPlaque(row, better);
 
   if (hasGlub && state.settings.studio.renderInAgnostr && meta.flair && isValidFlair(meta.flair)) {
     applyFlair(row, ev, meta.flair);
@@ -3907,6 +3978,7 @@ function closeViewer() {
   wrap?.classList.remove("is-open");
   wrap?.setAttribute("aria-hidden", "true");
   state.viewer = null;
+  clearStuckHoverMenus(null);
 }
 
 function renderViewer() {
@@ -4340,6 +4412,7 @@ function sendAction(kind) {
     return;
   }
   closeContextMenu();
+  clearStuckHoverMenus(null);
   if (sendComposerText(text)) closePanel();
 }
 
@@ -4406,6 +4479,7 @@ function openCustomAction() {
     return;
   }
   closeContextMenu();
+  clearStuckHoverMenus(null);
   state.customAction = { text: state.settings.actions.custom || "boops" };
   renderCustomAction();
   const wrap = state.shadow?.querySelector("[data-modal='action']");
@@ -4427,6 +4501,7 @@ function sendCustomAction() {
   const body = formatActionText(raw, target.mention);
   if (!body) return;
   closeActionModal();
+  clearStuckHoverMenus(null);
   if (sendComposerText(body)) closePanel();
 }
 
@@ -4527,7 +4602,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.2";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.3";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4544,7 +4619,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.2"}`, 
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.3"}`, 
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
@@ -4608,6 +4683,19 @@ async function init() {
     }
   }, { capture: true, passive: true });
   document.addEventListener("click", handleGlobalClickSound, true);
+  let lastHoverCleanup = 0;
+  document.addEventListener(
+    "pointermove",
+    (event) => {
+      const now = Date.now();
+      if (now - lastHoverCleanup < 120) return;
+      lastHoverCleanup = now;
+      const target = event.target;
+      const row = target instanceof Element ? target.closest(".ag-msg-row") : null;
+      clearStuckHoverMenus(row);
+    },
+    { passive: true, capture: true },
+  );
   window.addEventListener("resize", () => scheduleEnhance(), { passive: true });
   window.setInterval(tickObfuscation, 70);
   window.setInterval(flairTickerTick, 1500);
