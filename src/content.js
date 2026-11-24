@@ -1251,6 +1251,45 @@ function ensureBetterNav(modal) {
   return nav;
 }
 
+function nativeSettingsNav(modal) {
+  const items = [
+    ...modal.querySelectorAll(
+      ".ag-set-nav-list .ag-set-nav-item:not([data-ba-settings-nav]):not([data-ba-about-nav])",
+    ),
+  ];
+  return items.find((item) => !item.classList.contains("active")) || items[0] || null;
+}
+
+// On mobile Agnostr's settings modal starts on the nav list and only shows the
+// detail pane after a native nav item click. Our cloned nav items have no React
+// handler, so open the native detail view first, then render our pane into it.
+function enterSettingsMobileDetail(modal) {
+  if (!modal.classList.contains("mobile-menu")) return false;
+  if (modal.dataset.baMobileEntering === "1") return true;
+  const native = nativeSettingsNav(modal);
+  if (!native) return false;
+  const better = state.settingsBetterActive;
+  const about = state.aboutActive;
+  modal.dataset.baMobileEntering = "1";
+  native.click();
+  let tries = 0;
+  const check = () => {
+    if (!modal.isConnected) return;
+    if (!modal.classList.contains("mobile-menu")) {
+      delete modal.dataset.baMobileEntering;
+      state.settingsBetterActive = better;
+      state.aboutActive = about;
+      syncSettingsIntegration();
+      return;
+    }
+    tries += 1;
+    if (tries < 20) window.setTimeout(check, 30);
+    else delete modal.dataset.baMobileEntering;
+  };
+  window.setTimeout(check, 20);
+  return true;
+}
+
 function ensureAboutNav(modal) {
   const navList = modal.querySelector(".ag-set-nav-list");
   if (!navList) return null;
@@ -1323,7 +1362,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.5";
+  const version = manifest.version || "1.1.6";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1802,6 +1841,11 @@ function hideNativeBroadcastClient(modal) {
   }
 }
 
+function syncSettingsMobileTitle(modal, title) {
+  const section = modal.querySelector(".ag-set-mobile-section");
+  if (section && title && section.textContent !== title) section.textContent = title;
+}
+
 function syncSettingsIntegration() {
   if (state.settings.enabled === false) return;
   const modal = document.querySelector(".ag-settings-modal");
@@ -1820,15 +1864,20 @@ function syncSettingsIntegration() {
   const nav = ensureBetterNav(modal);
   const aboutNav = ensureAboutNav(modal);
   if (!nav || !aboutNav) return;
+  if (state.settingsBetterActive || state.aboutActive) {
+    if (enterSettingsMobileDetail(modal)) return;
+  }
   if (state.aboutActive) {
     for (const item of modal.querySelectorAll(".ag-set-nav-item")) item.classList.toggle("active", item === aboutNav);
     state.settingsBetterActive = false;
+    syncSettingsMobileTitle(modal, "About");
     hideBetterSettingsPane(modal);
     renderAboutPane(modal);
     return;
   }
   if (state.settingsBetterActive) {
     for (const item of modal.querySelectorAll(".ag-set-nav-item")) item.classList.toggle("active", item === nav);
+    syncSettingsMobileTitle(modal, "Better Agnostr");
     hideAboutPane(modal);
     renderBetterSettingsPane(modal);
     return;
@@ -1838,6 +1887,7 @@ function syncSettingsIntegration() {
   hideBetterSettingsPane(modal);
   hideAboutPane(modal);
   const title = modal.querySelector(".ag-set-detail-title")?.textContent?.trim();
+  syncSettingsMobileTitle(modal, title);
   if (title === "Appearance") injectAppearanceExtras(modal);
   else if (title === "Privacy & Trust") injectNativePrivacy(modal);
   else if (title === "Notifications") injectNativeSounds(modal);
@@ -1919,6 +1969,9 @@ document.addEventListener(
       event.preventDefault();
       event.stopPropagation();
       openBetterSettings(state.betterTab || "line");
+      window.setTimeout(() => {
+        document.querySelector(".ag-suite-backdrop .ag-suite-close")?.click();
+      }, 0);
       return;
     }
     const emojiTab = target.closest("[data-ba-emoji-tab]");
@@ -2067,8 +2120,16 @@ document.addEventListener(
       handleSettingsAction(action);
       return;
     }
+    const settingsBack = target.closest(".ag-settings-modal .ag-sheet-back-btn");
+    if (settingsBack) {
+      state.settingsBetterActive = false;
+      state.aboutActive = false;
+      scheduleSettingsSync();
+    }
     const nav = target.closest(".ag-set-nav-item");
     if (nav && !nav.hasAttribute("data-ba-settings-nav") && !nav.hasAttribute("data-ba-about-nav")) {
+      const modal = nav.closest(".ag-settings-modal");
+      if (modal?.dataset.baMobileEntering === "1") return;
       state.settingsBetterActive = false;
       state.aboutActive = false;
       scheduleSettingsSync();
@@ -4654,7 +4715,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.5";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.6";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4671,7 +4732,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.5"}`, 
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.6"}`, 
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,

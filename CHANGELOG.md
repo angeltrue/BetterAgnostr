@@ -2,6 +2,14 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.6 — Mobile settings panes
+
+- Fixed **Better Agnostr** and **About** not opening from the settings list on mobile.
+- The custom settings panes now open Agnostr's detail view through its native navigation before rendering.
+- Returning from a custom pane restores the normal settings list.
+- The mobile settings header now shows **Better Agnostr** or **About** instead of the previously selected native section.
+- The Agnostr Suite launcher now closes when opening **Better Agnostr** from its footer on mobile.
+
 ## 1.1.5 — Call cleanup, mobile polish, and group switcher
 
 - Removed Room Info call sections and call action buttons entirely while call blocking is enabled.
