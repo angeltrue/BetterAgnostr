@@ -2,16 +2,7 @@
 
 All notable changes to Better Agnostr are documented here.
 
-## 1.2.0 — Chromium port (pre-release)
-
-- Added a Chromium Manifest V3 build target.
-- Switched the background script to a Chrome service worker.
-- Added Chrome 148+ namespace and runtime-message compatibility.
-- Added `chrome-extension:` support for bundled font URLs.
-- Packaged a `better-agnostr-1.2.0-chromium.zip` pre-release.
-- Kept the Firefox build on `main`.
-
-## 1.1.2 — Privacy defaults and context-menu stability
+## 1.1.2 — Privacy defaults, context-menu stability, and Chromium port
 
 - Moved voice-memo removal into **Settings → Privacy & Trust** and enabled it by default.
 - Enabled **Omit teleport tag** by default, including for existing installations on the previous schema.
@@ -19,6 +10,11 @@ All notable changes to Better Agnostr are documented here.
 - Paused heavy page enhancements while a native context menu is open.
 - Limited message actions to actual message context menus.
 - Throttled the Bitchat-to-Chat text rewrite and narrowed its attribute scan.
+- Added a Chromium Manifest V3 build target with a service-worker background.
+- Added Chrome 148+ namespace and runtime-message compatibility.
+- Added `chrome-extension:` support for bundled font URLs.
+- Packaged a `better-agnostr-1.1.2-chromium.zip` pre-release.
+- Kept the Firefox build on `main`.
 
 ## 1.1.1 — Teleport omission, client control, matcha theme
 

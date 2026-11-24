@@ -208,7 +208,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.2.0-chromium.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.2-chromium.zip
 ```
 
 Source layout:
