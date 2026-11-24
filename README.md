@@ -86,7 +86,7 @@ Older messages are reconstructed from Agnostr's local message store when the raw
 
 ### Glub line and flair
 
-Open **Agnostr Settings → Better Agnostr → line**, or use the **Better Agnostr** entry in the Agnostr Suite. On mobile, the floating button also opens it.
+Open **Agnostr Settings → Better Agnostr → line**, or use the **Better Agnostr** entry in the Agnostr Suite. On mobile, the Suite is available from the **Apps** tab.
 
 - **Line format** supports glub's `&` codes: `&l` bold, `&o` italic, `&n` underline, `&m` strike, `&k` obfuscate, `&g` rainbow, `&r` reset, and `&0`–`&f` colours.
 - Placeholders are `{name}`, `{tag}`, and `{msg}`. A template without `{msg}` gets the message appended.
@@ -143,7 +143,7 @@ The separate emoji button opens a categorized grid with 2,300+ base emoji. The c
 
 The native app rail is hidden. The **Agnostr Suite** button is available in every workspace header: Chat, Agora, Agmail, and Agwallet.
 
-On the groups page, a slim switcher replaces the rail with joined groups, a create/join shortcut, and the suite button inline with the group buttons. Group conversations also show a **Public chat** button, and the suite's **Chat** card returns to public chat.
+On the groups page, a slim switcher replaces the rail with joined groups, a create/join shortcut, and the suite button inline with the group buttons. The suite's **Chat** card returns to public chat.
 
 The suite footer carries **Settings** and **Better Agnostr** side by side, so the settings shortcut is available everywhere. Agnostr's mobile-only footer actions stay hidden.
 
@@ -197,7 +197,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.4-chromium.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.5-chromium.zip
 ```
 
 Source layout:

@@ -730,12 +730,7 @@ function shellHtml() {
     </div>
   </div>
   <div class="ba-toasts" data-role="toasts"></div>
-  <button type="button" class="ba-fab" data-action="open-panel" aria-label="Open Better Agnostr settings">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/>
-      <path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8L19 17Z"/>
-    </svg>
-  </button>`;
+`;
 }
 
 // ---------------------------------------------------------------------------
@@ -871,11 +866,16 @@ function markLocateButtons() {
   }
 }
 
+function isCallControlText(text) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  return /(?:^|\b)(?:(?:start|join|answer|leave|end)\s+(?:(?:voice|video)\s+)?call|(?:voice|video)\s+call)\b|voice lounge|bitchat group call/i.test(value);
+}
+
 function removeCallMenuItems() {
   const calls = state.settings.privacy.calls;
   if (!calls.disable) return;
   for (const label of document.querySelectorAll(".ag-ctx-item-label")) {
-    if (!/^(start |join |answer )?(voice|video) call$/i.test(label.textContent?.trim() || "")) continue;
+    if (!isCallControlText(label.textContent)) continue;
     const item = label.closest(".ag-ctx-item");
     if (!item) continue;
     item.disabled = true;
@@ -901,6 +901,12 @@ function hideCallUi() {
     el.style.display = "none";
     el.dataset.baCallUiHidden = "1";
   }
+  for (const section of document.querySelectorAll(".ag-sheet-section")) {
+    const title = section.querySelector(".ag-sheet-section-title")?.textContent || "";
+    if (!section.querySelector(".ag-sheet-call-card") && !/group call|voice call|video call/i.test(title)) continue;
+    section.style.display = "none";
+    section.dataset.baCallUiHidden = "1";
+  }
 }
 
 function applyCallButtons() {
@@ -909,7 +915,7 @@ function applyCallButtons() {
   for (const btn of document.querySelectorAll("button")) {
     if (btn.closest(".ag-settings-modal")) continue;
     const text = `${btn.textContent || ""} ${btn.getAttribute("aria-label") || ""} ${btn.title || ""}`.replace(/\s+/g, " ").trim();
-    if (!/^(?:start |join |answer )?(?:voice|video) call$/i.test(text)) continue;
+    if (!isCallControlText(text)) continue;
     btn.disabled = blocked;
     btn.classList.toggle("ba-call-disabled", blocked);
     if (blocked) {
@@ -926,6 +932,21 @@ function applyCallButtons() {
     }
   }
 }
+
+function blockCallControlClick(event) {
+  if (!state.settings.privacy.calls.disable) return;
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const control = target.closest("button, a, [role='button'], .ag-ctx-item, .ag-sheet-action-btn");
+  if (!control) return;
+  const text = `${control.textContent || ""} ${control.getAttribute("aria-label") || ""} ${control.title || ""}`;
+  if (!isCallControlText(text)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}
+
+document.addEventListener("click", blockCallControlClick, true);
+document.addEventListener("pointerdown", blockCallControlClick, true);
 
 // ---------------------------------------------------------------------------
 // Agnostr settings integration
@@ -1302,7 +1323,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.4";
+  const version = manifest.version || "1.1.5";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -3146,8 +3167,6 @@ function applyShortcutVisibility() {
   for (const node of document.querySelectorAll("[data-ba-rail], .ba-rail-slot")) node.remove();
   ensureGroupRail();
   ensureHeaderButtons();
-  const fab = state.shadow?.querySelector(".ba-fab");
-  if (fab) fab.style.display = show ? "" : "none";
 }
 
 function positionSuitePopover() {
@@ -3228,7 +3247,10 @@ function ensureSuiteBetter() {
 function groupRailPage() {
   if (window.innerWidth < 900) return null;
   const visible = (el) => el instanceof HTMLElement && el.getClientRects().length > 0;
-  return [...document.querySelectorAll(".ag-srv-discord-pane")].find(visible) || null;
+  return (
+    [...document.querySelectorAll(".ag-srv-discord-pane, .ag-srv-pane-pane, .ag-srv-mobile-split")].find(visible) ||
+    null
+  );
 }
 
 function nativeGroupButtons() {
@@ -3286,6 +3308,7 @@ function handleGroupRailClick(event) {
   event.stopPropagation();
   const native = nativeGroupButtons()[Number(group.getAttribute("data-ba-group-index"))];
   native?.click();
+  window.setTimeout(ensureGroupRail, 180);
 }
 
 function handleGroupRailContext(event) {
@@ -3391,23 +3414,6 @@ function ensureHeaderButtons() {
       });
       if (target.matches(".ag-wallet-stage-header, .ag-amail-top-actions")) target.append(suite);
       else target.prepend(suite);
-    }
-    if (groupView && !target.querySelector("[data-ba-public-chat]")) {
-      const back = document.createElement("button");
-      back.type = "button";
-      back.className = "ag-circle-btn ba-public-chat-btn";
-      back.setAttribute("data-ba-public-chat", "1");
-      back.title = "Back to public chat";
-      back.setAttribute("aria-label", "Back to public chat");
-      back.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg><span>Public chat</span>';
-      back.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!returnToPublicChat()) {
-          toast("warning", "Public chat unavailable", "Open the Agnostr Suite and choose Chat.");
-        }
-      });
-      target.prepend(back);
     }
   }
 
@@ -4648,7 +4654,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.4";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.5";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4665,7 +4671,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.4"}`, 
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.5"}`, 
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
@@ -4689,6 +4695,10 @@ function observePage() {
     ".ag-msg-row",
     ".ag-msg-actions",
     ".ag-msg-head",
+    ".ag-app-rail",
+    ".ag-rail-srv",
+    ".ag-srv-mobile-rail",
+    ".ag-mobile-tabbar",
     ".ag-composer-dock",
     ".ag-composer-right",
     ".ag-suite-popover",
@@ -4698,9 +4708,12 @@ function observePage() {
     ".ag-conv-pane",
     ".ag-header",
     ".ag-srv-discord-pane",
+    ".ag-srv-pane-pane",
+    ".ag-srv-mobile-split",
     ".ag-settings-modal",
     ".ag-peer-modal",
     ".ag-sheet",
+    ".ag-info-sheet",
     ".ag-quick-profile-popover",
     ".ag-ctx-menu",
   ].join(",");
@@ -4710,6 +4723,7 @@ function observePage() {
       return;
     }
     let relevant = false;
+    let urgentCallUi = false;
     for (const record of records) {
       if (record.type === "childList") {
         const target = record.target;
@@ -4722,6 +4736,12 @@ function observePage() {
           if (!(node instanceof Element)) continue;
           if (node.matches(relevantSelector) || node.querySelector(relevantSelector)) {
             relevant = true;
+            if (
+              node.matches(".ag-sheet, .ag-info-sheet, .ag-ctx-menu, .ag-peer-modal") ||
+              node.querySelector(".ag-sheet, .ag-info-sheet, .ag-ctx-menu, .ag-peer-modal")
+            ) {
+              urgentCallUi = true;
+            }
             break;
           }
         }
@@ -4738,6 +4758,11 @@ function observePage() {
       if (relevant) break;
     }
     if (!relevant) return;
+    if (urgentCallUi) {
+      applyCallButtons();
+      hideCallUi();
+      removeCallMenuItems();
+    }
     scheduleEnhance();
     scheduleSettingsSync();
     if (state.settings.privacy.calls.disable && state.settings.privacy.calls.hideUi) removeCallMenuItems();

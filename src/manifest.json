@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Better Agnostr",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "minimum_chrome_version": "148",
   "description": "Message JSON inspector, Glub line/flair studio, client controls, retro sounds, privacy scrubber, and call blocking for agnostr.com.",
   "homepage_url": "https://github.com/angeltrue/BetterAgnostr",
