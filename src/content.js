@@ -47,6 +47,7 @@ const FONT_PRESETS = [
   { id: "cormorant", label: "Cormorant Garamond", stack: "'BA Cormorant', 'Cormorant Garamond', Georgia, serif" },
   { id: "baskerville", label: "Libre Baskerville", stack: "'BA Baskerville', 'Libre Baskerville', Georgia, serif" },
   { id: "lora", label: "Lora", stack: "'BA Lora', Lora, Georgia, serif" },
+  { id: "literata", label: "Literata", stack: "'BA Literata', Literata, Georgia, serif" },
   { id: "fraunces", label: "Fraunces", stack: "'BA Fraunces', Fraunces, Georgia, serif" },
   { id: "instrument", label: "Instrument Serif", stack: "'BA Instrument', 'Instrument Serif', Georgia, serif" },
   { id: "noto", label: "Noto Sans", stack: "'Noto Sans', system-ui, sans-serif" },
@@ -801,6 +802,8 @@ function applyFont() {
 @font-face{font-family:"BA Baskerville";src:url("${api.runtime.getURL("fonts/baskerville-700.woff2")}") format("woff2");font-weight:700;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Lora";src:url("${api.runtime.getURL("fonts/lora-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Lora";src:url("${api.runtime.getURL("fonts/lora-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Literata";src:url("${api.runtime.getURL("fonts/literata-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Literata";src:url("${api.runtime.getURL("fonts/literata-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Fraunces";src:url("${api.runtime.getURL("fonts/fraunces-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Fraunces";src:url("${api.runtime.getURL("fonts/fraunces-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Instrument";src:url("${api.runtime.getURL("fonts/instrument-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
@@ -1282,7 +1285,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.0";
+  const version = manifest.version || "1.1.1";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1496,8 +1499,13 @@ function injectNativePrivacy(modal) {
   const broadcast = [...stack.querySelectorAll(".ag-set-toggle-card")].find((el) =>
     el.textContent?.includes("Broadcast Agnostr client"),
   );
-  if (broadcast) broadcast.after(group);
-  else stack.prepend(group);
+  if (broadcast) {
+    broadcast.style.display = "none";
+    broadcast.setAttribute("data-ba-hidden-native-broadcast", "1");
+    broadcast.after(group);
+  } else {
+    stack.prepend(group);
+  }
 }
 
 function injectNativeSounds(modal) {
@@ -1563,7 +1571,7 @@ function injectAppearanceExtras(modal) {
         </select></div>
         <div class="ba-set-field"><span>Custom family</span><input class="ag-input" data-ba-setting="font.customFamily" maxlength="80" value="${h(state.settings.font.customFamily)}" placeholder="installed family name"></div>
         <div class="ba-set-field"><span>Custom URL</span><input class="ag-input" data-ba-setting="font.customUrl" maxlength="500" value="${h(state.settings.font.customUrl)}" placeholder="https://…/font.woff2"></div>
-        <div class="ba-set-note">IBM Plex, Atkinson Hyperlegible, Lexend, and six serif families are bundled.</div>
+        <div class="ba-set-note">IBM Plex, Atkinson Hyperlegible, Lexend, and seven serif families are bundled.</div>
       </div>`;
       fontGroup = holder.firstElementChild;
       cssGroup.after(fontGroup);
@@ -1742,6 +1750,19 @@ function hideBetterSettingsPane(modal) {
   if (overlay) overlay.hidden = true;
 }
 
+function hideNativeBroadcastClient(modal) {
+  for (const card of modal.querySelectorAll(".ag-set-toggle-card")) {
+    if (!/Broadcast Agnostr client/i.test(card.textContent || "")) continue;
+    card.style.display = "none";
+    card.setAttribute("data-ba-hidden-native-broadcast", "1");
+    const input = card.querySelector('input[type="checkbox"]');
+    if (input instanceof HTMLInputElement && input.checked && card.dataset.baBroadcastToggle !== "1") {
+      card.dataset.baBroadcastToggle = "1";
+      input.click();
+    }
+  }
+}
+
 function syncSettingsIntegration() {
   if (state.settings.enabled === false) return;
   const modal = document.querySelector(".ag-settings-modal");
@@ -1751,6 +1772,7 @@ function syncSettingsIntegration() {
     state.aboutActive = false;
     return;
   }
+  hideNativeBroadcastClient(modal);
   if (!state.settingsModalOpen) {
     state.settingsModalOpen = true;
     state.settingsBetterActive = false;
@@ -4488,7 +4510,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.0";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.1";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4505,7 +4527,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.0"}`, 
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.1"}`, 
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,

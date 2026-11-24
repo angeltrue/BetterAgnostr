@@ -2,6 +2,13 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.1 — Teleport omission, client control, matcha theme
+
+- Fixed teleport-tag omission by removing `t=teleport` case-insensitively and re-checking the final signed frame before it reaches a relay.
+- Removed the redundant native **Broadcast Agnostr client** switch; outgoing client tags are controlled by the Better Agnostr Client tab.
+- Added the **Iced Matcha Latte** theme.
+- Added the **Literata** serif font for long-form reading.
+
 ## 1.1.0 — Suite shortcut, group switcher, and serif fonts
 
 - Removed the dedicated Settings and Better Agnostr buttons from the profile footer.

@@ -41,7 +41,7 @@ A Firefox extension for **agnostr.com** that adds:
 - **12 retro message chimes and 12 retro client click sounds**, with per-event chime toggles;
 - **Hug / Slap / Custom action** items in the message right-click menu;
 - a **categorized emoji picker** with 2,300+ base emoji for the composer;
-- **custom fonts** (three sans and six serif families bundled, plus popular system families and custom family/URL);
+- **custom fonts** (three sans and seven serif families bundled, plus popular system families and custom family/URL);
 - a green **Better Agnostr** avatar marker alongside Agnostr's own blue marker;
 - Locate Me removal, teleport-tag control, call-button blocking, and a simplified app shell.
 
@@ -102,11 +102,11 @@ Outgoing chat events are changed **before signing** by hooking the page's signer
 
 Choose a client tag value and a policy per event group:
 
-- **leave** keeps Agnostr's own `client` tag;
+- **leave** keeps whatever `client` tag the event already has;
 - **spoof** replaces it with your chosen value;
 - **strip** removes the tag entirely.
 
-The default is to spoof chat messages as `BetterAgnostr`. Selecting `glub.chat` also stamps the live glub build so glub.chat does not hide the event. If the build is unknown, the spoof is left alone for that event rather than making it invisible on glub.
+The default is to spoof chat messages as `BetterAgnostr`. Selecting `glub.chat` also stamps the live glub build so glub.chat does not hide the event. If the build is unknown, the spoof is left alone for that event rather than making it invisible on glub. The native **Broadcast Agnostr client** switch is disabled and hidden; these policies are the single client-tag control.
 
 Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritten without the ephemeral key; they are left unchanged.
 
@@ -116,7 +116,7 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 - **Metadata scrubber:** removes selected tags from every outgoing event (routing tags are always kept), and strips `utm_*`, `fbclid`, `si`, `igshid`, and similar tracking parameters from links.
 - **Review before signing:** holds selected event groups before signing and shows every tag. Check a tag to remove it, then send or cancel. Critical routing tags and the `glub` tag are protected from removal; the `client` tag can be removed.
 - **Locate Me:** hidden by default; toggle in **Settings → Privacy & Trust**.
-- **Teleport:** optionally omit the `t=teleport` tag from outgoing events in **Settings → Privacy & Trust**.
+- **Teleport:** optionally omit the `t=teleport` tag from outgoing events in **Settings → Privacy & Trust**. The tag is removed before signing and checked again on the final signed frame before it reaches a relay.
 
 ### Settings
 
@@ -128,7 +128,7 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 - **client** — client tag and per-event policies;
 - **general** — suite-shortcut and voice-memo visibility, composer-panel state, and the custom action default.
 
-**Settings → Privacy & Trust** gains a **Better Agnostr** group with Locate Me, teleport, tracking-parameter scrubbing, review-before-signing, call blocking, and tag-removal controls.
+**Settings → Privacy & Trust** gains a **Better Agnostr** group with Locate Me, teleport, tracking-parameter scrubbing, review-before-signing, call blocking, and tag-removal controls. The native **Broadcast Agnostr client** switch is hidden because the Client tab now owns outgoing client tags.
 
 **Settings → Notifications** gains **Better Agnostr sounds** directly below the native sound section: message-chime and UI-click presets, volume, chat/mention/DM/call toggles, UI clicks, and test buttons. The native **Message chimes** switch remains the on/off control for message chimes.
 
@@ -136,9 +136,9 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 
 **Settings → Appearance** includes:
 
-- all eleven Glub.chat themes: Chat, Cyberpunk 2077, Blade Runner, Ex Machina, Giedi Prime, Matrix Neo, Star-Lord, Time Variance, Tron Legacy, Lumon Light, and Her Light;
+- all twelve Glub.chat themes: Chat, Cyberpunk 2077, Blade Runner, Ex Machina, Giedi Prime, Matrix Neo, Star-Lord, Time Variance, Tron Legacy, Lumon Light, Her Light, and Iced Matcha Latte;
 - a custom CSS box;
-- a **Font** picker with bundled IBM Plex Sans, Atkinson Hyperlegible, Lexend, and six serif families (Playfair Display, Cormorant Garamond, Libre Baskerville, Lora, Fraunces, Instrument Serif), popular system families, and custom family/URL support.
+- a **Font** picker with bundled IBM Plex Sans, Atkinson Hyperlegible, Lexend, and seven serif families (Playfair Display, Cormorant Garamond, Libre Baskerville, Lora, Literata, Fraunces, Instrument Serif), popular system families, and custom family/URL support.
 
 The native app rail is hidden. The **Agnostr Suite** button is available in every workspace header: Chat, Agora, Agmail, and Agwallet. On the groups page, a slim group switcher replaces the hidden app rail and keeps the suite button inline with the joined-group buttons and a create/join shortcut. The suite footer carries **Better Agnostr** next to **Settings**, so the settings shortcut is available on every page without a profile-footer button. The suite popover no longer carries duplicate Map or Search utilities. Group conversations show a **Public chat** button in the conversation header, and the suite’s **Chat** card also leaves a group and returns to public chat. Agnostr’s own mobile-only footer actions remain hidden.
 
@@ -189,7 +189,7 @@ The Glub.chat theme grid, font picker, and custom CSS box live in **Agnostr Sett
 
 ## Credits
 
-Glub flair CSS/markup is adapted from glub.chat's own `flair.js` and stylesheet so the effects match on both clients. Glub theme colours are ported from glub.chat's theme blocks. Bundled fonts are IBM Plex Sans, Atkinson Hyperlegible, Lexend, Playfair Display, Cormorant Garamond, Libre Baskerville, Lora, Fraunces, and Instrument Serif under the SIL Open Font License (licences in `src/fonts/`). The in-app About page credits Agnostr to hinsley and Better Agnostr to Angel.
+Glub flair CSS/markup is adapted from glub.chat's own `flair.js` and stylesheet so the effects match on both clients. Glub theme colours are ported from glub.chat's theme blocks. Bundled fonts are IBM Plex Sans, Atkinson Hyperlegible, Lexend, Playfair Display, Cormorant Garamond, Libre Baskerville, Lora, Literata, Fraunces, and Instrument Serif under the SIL Open Font License (licences in `src/fonts/`). The in-app About page credits Agnostr to hinsley and Better Agnostr to Angel.
 
 ## Security notes
 
@@ -206,7 +206,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.0.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.1.zip
 ```
 
 Source layout:

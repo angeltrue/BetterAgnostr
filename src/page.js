@@ -161,7 +161,7 @@ import {
       state.token = data.token || state.token;
       setConfig(parseSettingsPayload(data.payload?.settings));
       publishStatus();
-      post("ready", { version: "1.1.0" });
+      post("ready", { version: "1.1.1" });
       start();
       return;
     }
@@ -729,6 +729,41 @@ import {
       return;
     }
 
+    // Last-mile guard: if a signing path bypasses the normal prepare step and a
+    // teleport tag survives, remove it before the signed frame reaches a relay.
+    if (state.settings.privacy.omitTeleport && hasTeleportTag(ev.tags)) {
+      const cleaned = { ...ev, tags: stripTeleportTags(ev.tags) };
+      const resigned = resignEvent(cleaned);
+      if (resigned) {
+        state.aliases.set(ev.id, resigned.id);
+        state.aliasReverse.set(resigned.id, ev.id);
+        sendRaw(ws, JSON.stringify(["EVENT", resigned]));
+        rememberEvent(resigned, { dir: "out", relay: url });
+        pushFrameLog({
+          dir: "out",
+          relay: url,
+          type: "EVENT",
+          eventId: resigned.id,
+          kind: resigned.kind,
+          event: resigned,
+          aliasOf: ev.id,
+          summary: summarizeEvent(resigned),
+        });
+        post("alias", { from: ev.id, to: resigned.id });
+        return;
+      }
+      pushFrameLog({
+        dir: "out",
+        relay: url,
+        type: "BLOCKED_TELEPORT",
+        eventId: ev.id,
+        kind: ev.kind,
+        summary: "outgoing teleport tag blocked by Better Agnostr",
+      });
+      notice("warning", "Teleport tag blocked", "The message was not sent because the teleport tag could not be removed before signing.");
+      return;
+    }
+
     handleOutgoingFrame(data, url);
 
     if (state.signerHooked) {
@@ -1208,6 +1243,18 @@ import {
     return tags.filter((t) => !Array.isArray(t) || !names.has(t[0]));
   }
 
+  function isTeleportTag(tag) {
+    return Array.isArray(tag) && tag[0] === "t" && String(tag[1] || "").trim().toLowerCase() === "teleport";
+  }
+
+  function hasTeleportTag(tags) {
+    return Array.isArray(tags) && tags.some(isTeleportTag);
+  }
+
+  function stripTeleportTags(tags) {
+    return tags.filter((tag) => !isTeleportTag(tag));
+  }
+
   function applyClientPolicy(ev) {
     const settings = state.settings;
     let policy = policyForKind(settings, ev.kind);
@@ -1230,7 +1277,7 @@ import {
 
   function applyPrivacyTags(ev) {
     if (state.settings.privacy.omitTeleport) {
-      ev.tags = ev.tags.filter((t) => !(Array.isArray(t) && t[0] === "t" && t[1] === "teleport"));
+      ev.tags = stripTeleportTags(ev.tags);
     }
     const strip = new Set(state.settings.privacy.stripTags);
     if (!strip.size) return;

@@ -126,6 +126,18 @@ export const GLUB_THEMES = [
     danger: "#a63324",
     light: true,
   },
+  {
+    id: "iced-matcha-latte",
+    label: "Iced Matcha Latte",
+    description: "oat cream, iced matcha, cold green lift",
+    bg: "#f1f0e7",
+    fg: "#29382f",
+    muted: "#778578",
+    geo: "#5b8b6e",
+    accent: "#4c8a5f",
+    danger: "#b04a3c",
+    light: true,
+  },
 ];
 
 export const THEME_BY_ID = new Map(GLUB_THEMES.map((t) => [t.id, t]));
