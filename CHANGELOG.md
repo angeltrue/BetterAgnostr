@@ -2,6 +2,15 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.3 — Client plaques, teleport visuals, and hover cleanup
+
+- Replaced the extension's green Better Agnostr avatar border with a small **BA** plaque next to usernames.
+- Let Agnostr's own client-indicator borders remain the only avatar borders.
+- Added the **BA** plaque to messages, the People list, the quick profile, and the peer profile.
+- Hid the visual TELEPORT badge on your own profile when teleport-tag omission is enabled.
+- Fixed message hover action menus getting stuck by clearing stale `actions-open`/`picker-open` state and focus.
+- Cleared hover state after the event viewer, Hug, Slap, and custom actions.
+
 ## 1.1.2 — Privacy defaults, context-menu stability, and Chromium port
 
 - Moved voice-memo removal into **Settings → Privacy & Trust** and enabled it by default.
