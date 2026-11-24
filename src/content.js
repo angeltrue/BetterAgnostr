@@ -1362,7 +1362,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.6";
+  const version = manifest.version || "1.1.7";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -3206,7 +3206,6 @@ function enhanceAll() {
     }
     removeCallMenuItems();
     maintainCallControls();
-    ensureGroupRail();
     ensureHeaderButtons();
     ensureSuiteButton();
     ensureToolbars();
@@ -3226,7 +3225,6 @@ function applyShortcutVisibility() {
   const show = state.settings.ui.showButton !== false;
   document.documentElement.classList.toggle("ba-hide-rail-shortcut", !show);
   for (const node of document.querySelectorAll("[data-ba-rail], .ba-rail-slot")) node.remove();
-  ensureGroupRail();
   ensureHeaderButtons();
 }
 
@@ -3237,9 +3235,8 @@ function positionSuitePopover() {
   const rect = trigger.getBoundingClientRect();
   const box = pop.getBoundingClientRect();
   const margin = 10;
-  const fromRail = !!trigger.closest(".ba-group-rail");
-  let left = fromRail ? rect.right + 10 : rect.right - box.width;
-  if (!fromRail && left < margin) left = rect.left;
+  let left = rect.right - box.width;
+  if (left < margin) left = rect.left;
   left = Math.max(margin, Math.min(left, window.innerWidth - box.width - margin));
   let top = rect.bottom + 8;
   if (top + box.height > window.innerHeight - margin) {
@@ -3305,142 +3302,10 @@ function ensureSuiteBetter() {
   footer.classList.add("ba-suite-footer-dynamic");
 }
 
-function groupRailPage() {
-  if (window.innerWidth < 900) return null;
-  const visible = (el) => el instanceof HTMLElement && el.getClientRects().length > 0;
-  return (
-    [...document.querySelectorAll(".ag-srv-discord-pane, .ag-srv-pane-pane, .ag-srv-mobile-split")].find(visible) ||
-    null
-  );
-}
-
-function nativeGroupButtons() {
-  return [...document.querySelectorAll(".ag-rail-servers button.ag-rail-srv")];
-}
-
-function groupIconMarkup(button) {
-  const image = button.querySelector("img");
-  const src = image?.getAttribute("src") || "";
-  if (src) return `<img class="ba-group-rail-img" src="${h(src)}" alt="">`;
-  const emoji = button.querySelector(".ag-rail-srv-emoji")?.textContent?.trim() || "";
-  if (emoji && emoji !== "📡") return `<span class="ba-group-rail-glyph">${h(emoji)}</span>`;
-  const mono = button.querySelector(".ag-rail-srv-mono")?.textContent?.trim() || "";
-  const label = button.getAttribute("aria-label") || "Group";
-  const words = label.replace(/[^a-z0-9 ]/gi, " ").trim().split(/\s+/).filter(Boolean);
-  const source = words.length > 1 ? words[words.length - 1] : words[0] || label;
-  const initials = (mono || source).slice(0, 2);
-  return `<span class="ba-group-rail-glyph mono">${h(initials.toUpperCase())}</span>`;
-}
-
-function groupRailSignature(groups) {
-  return groups
-    .map((button) => {
-      const badge = button.querySelector(".ag-rail-badge")?.textContent?.trim() || "";
-      return [
-        button.getAttribute("aria-label") || "",
-        button.classList.contains("active") || button.getAttribute("aria-current") === "page" ? "1" : "0",
-        badge,
-        button.querySelector("img")?.getAttribute("src") || "",
-        button.querySelector(".ag-rail-srv-emoji")?.textContent?.trim() || "",
-        button.querySelector(".ag-rail-srv-mono")?.textContent?.trim() || "",
-      ].join("|");
-    })
-    .join("~");
-}
-
-function handleGroupRailClick(event) {
-  const target = event.target;
-  if (!(target instanceof Element)) return;
-  if (target.closest("[data-ba-group-suite]")) {
-    event.preventDefault();
-    event.stopPropagation();
-    openSuitePopover();
-    return;
-  }
-  if (target.closest("[data-ba-group-add]")) {
-    event.preventDefault();
-    event.stopPropagation();
-    document.querySelector(".ag-rail-servers .ag-rail-add")?.click();
-    return;
-  }
-  const group = target.closest("[data-ba-group-index]");
-  if (!group) return;
-  event.preventDefault();
-  event.stopPropagation();
-  const native = nativeGroupButtons()[Number(group.getAttribute("data-ba-group-index"))];
-  native?.click();
-  window.setTimeout(ensureGroupRail, 180);
-}
-
-function handleGroupRailContext(event) {
-  const target = event.target;
-  if (!(target instanceof Element)) return;
-  const group = target.closest("[data-ba-group-index]");
-  if (!group) return;
-  const native = nativeGroupButtons()[Number(group.getAttribute("data-ba-group-index"))];
-  if (!native) return;
-  event.preventDefault();
-  event.stopPropagation();
-  const rect = group.getBoundingClientRect();
-  native.dispatchEvent(new MouseEvent("contextmenu", {
-    bubbles: true,
-    cancelable: true,
-    clientX: Math.round(rect.right),
-    clientY: Math.round(rect.top + rect.height / 2),
-    screenX: Math.round(rect.right),
-    screenY: Math.round(rect.top + rect.height / 2),
-    button: 2,
-    buttons: 2,
-    view: window,
-  }));
-}
-
-function ensureGroupRail() {
-  const page = groupRailPage();
-  document.documentElement.classList.toggle("ba-group-rail-open", !!page);
-  let rail = document.querySelector(".ba-group-rail");
-  if (!page) {
-    rail?.remove();
-    return;
-  }
-  if (!rail) {
-    rail = document.createElement("div");
-    rail.className = "ba-group-rail";
-    rail.setAttribute("role", "toolbar");
-    rail.setAttribute("aria-label", "Groups");
-    rail.addEventListener("click", handleGroupRailClick);
-    rail.addEventListener("contextmenu", handleGroupRailContext);
-    document.body.appendChild(rail);
-  }
-  const groups = nativeGroupButtons();
-  const hasAdd = !!document.querySelector(".ag-rail-servers .ag-rail-add");
-  const signature = `${groupRailSignature(groups)}|add:${hasAdd ? 1 : 0}`;
-  if (rail.dataset.signature === signature) return;
-  rail.dataset.signature = signature;
-  const groupHtml = groups
-    .map((button, index) => {
-      const label = button.getAttribute("aria-label") || `Group ${index + 1}`;
-      const active = button.classList.contains("active") || button.getAttribute("aria-current") === "page";
-      const badge = button.querySelector(".ag-rail-badge")?.textContent?.trim() || "";
-      return `<button type="button" class="ba-group-rail-btn${active ? " is-active" : ""}" data-ba-group-index="${index}" title="${h(label)}" aria-label="${h(label)}"${active ? ' aria-current="page"' : ""}>${groupIconMarkup(button)}${badge ? `<span class="ba-group-rail-badge">${h(badge)}</span>` : ""}</button>`;
-    })
-    .join("");
-  rail.innerHTML = `
-    <button type="button" class="ba-group-rail-btn ba-group-suite" data-ba-group-suite="1" data-ba-suite-trigger="1" title="Agnostr Suite" aria-label="Agnostr Suite">
-      <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg>
-    </button>
-    ${groups.length ? '<div class="ba-group-rail-divider" aria-hidden="true"></div>' : ""}
-    ${groupHtml}
-    ${hasAdd ? '<button type="button" class="ba-group-rail-btn ba-group-rail-add" data-ba-group-add="1" title="Create or join group" aria-label="Create or join group"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>' : ""}
-  `;
-  scheduleSuitePosition();
-}
-
 function ensureHeaderButtons() {
   const visible = (el) => el instanceof HTMLElement && el.getClientRects().length > 0;
   const workspace = document.querySelector(".ag-app")?.dataset.workspace || "";
   const groupView = isGroupChatView();
-  const groupRailActive = document.documentElement.classList.contains("ba-group-rail-open");
   if (!groupView) {
     for (const old of document.querySelectorAll("[data-ba-public-chat]")) old.remove();
   }
@@ -3458,9 +3323,9 @@ function ensureHeaderButtons() {
   }
   if (target) {
     for (const trigger of document.querySelectorAll("[data-ba-suite-trigger]")) {
-      if (!target.contains(trigger) && !trigger.closest(".ba-group-rail")) trigger.remove();
+      if (!target.contains(trigger)) trigger.remove();
     }
-    if (!groupRailActive && !target.querySelector("[data-ba-suite-trigger]")) {
+    if (!target.querySelector("[data-ba-suite-trigger]")) {
       const suite = document.createElement("button");
       suite.type = "button";
       suite.className = "ag-circle-btn ba-suite-trigger";
@@ -4715,7 +4580,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.6";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.7";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4732,7 +4597,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.6"}`, 
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.7"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,

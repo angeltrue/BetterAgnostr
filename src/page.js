@@ -161,7 +161,7 @@ import {
       state.token = data.token || state.token;
       setConfig(parseSettingsPayload(data.payload?.settings));
       publishStatus();
-      post("ready", { version: "1.1.6" });
+      post("ready", { version: "1.1.7" });
       start();
       return;
     }
