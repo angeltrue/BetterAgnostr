@@ -2,6 +2,14 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.7 — Restore the native app rail
+
+- Restored Agnostr's native desktop app rail after the latest Agnostr layout update.
+- Removed the rule that hid the entire rail, which was also removing workspace, group, settings, profile, and suite controls.
+- Removed the custom groups-page rail so the native rail is the only switcher.
+- The groups page now uses Agnostr's own group buttons without a duplicate rail.
+- Kept the Better Agnostr and About settings-pane fixes from 1.1.6.
+
 ## 1.1.6 — Mobile settings panes
 
 - Fixed **Better Agnostr** and **About** not opening from the settings list on mobile.

@@ -44,7 +44,7 @@ A Chromium extension for **agnostr.com**. It adds a message event inspector, Glu
 - **Hug / Slap / Custom action** right-click commands.
 - **Categorized emoji picker** with 2,300+ base emoji.
 - A small **BA** plaque beside Better Agnostr usernames. Client avatar borders remain Agnostr's own.
-- A simplified shell with the native app rail replaced by the Agnostr Suite and a groups-page switcher.
+- A simplified shell that keeps the native app rail, with workspace switching, groups, and the Agnostr Suite close at hand.
 
 Everything runs locally. The extension has no server, does not send keys anywhere, and stores settings in `browser.storage.local`.
 
@@ -141,9 +141,7 @@ The separate emoji button opens a categorized grid with 2,300+ base emoji. The c
 
 ### Suite and groups
 
-The native app rail is hidden. The **Agnostr Suite** button is available in every workspace header: Chat, Agora, Agmail, and Agwallet.
-
-On the groups page, a slim switcher replaces the rail with joined groups, a create/join shortcut, and the suite button inline with the group buttons. The suite's **Chat** card returns to public chat.
+The native app rail is kept, so workspace switching, joined groups, settings, and the Agnostr Suite stay available. The suite's **Chat** card returns to public chat.
 
 The suite footer carries **Settings** and **Better Agnostr** side by side, so the settings shortcut is available everywhere. Agnostr's mobile-only footer actions stay hidden.
 
@@ -197,7 +195,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.6-chromium.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.7-chromium.zip
 ```
 
 Source layout:
