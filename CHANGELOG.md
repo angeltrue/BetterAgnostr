@@ -2,6 +2,14 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.0.3 — Native reactions
+
+- Removed the Better Agnostr reaction picker enhancements. Agnostr now provides reactions directly in the client.
+- Removed the extra **＋** reaction control from the native hover reaction popover.
+- Removed the extra **＋** reaction control from the message right-click reaction row.
+- Removed the extension-side reaction sending path.
+- Kept the categorized emoji picker for the message composer.
+
 ## 1.0.2 — Group navigation & About links hotfix
 
 - Added a visible **Public chat** button to group conversations. It returns to Agnostr’s public Bitchat/geohash chat.

@@ -1325,26 +1325,6 @@ html.ba-hide-locate .ba-locate-hidden {
 }
 .ba-emoji-item:hover { background: var(--bg-hover); }
 .ba-emoji-btn { color: var(--text-secondary); }
-.ag-ctx-react-btn.ba-emoji-more { font-size: 16px; font-weight: 500; }
-.ag-emoji-popover .ba-emoji-more {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--bg-canvas);
-  color: var(--text-secondary);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
-.ag-emoji-popover .ba-emoji-more:hover {
-  color: var(--text-primary);
-  border-color: var(--border-default);
-}
 
 /* Settings opener next to the profile button. */
 .ba-footer-controls {

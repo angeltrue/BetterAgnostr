@@ -40,7 +40,7 @@ A Firefox extension for **agnostr.com** that adds:
 - all **Glub.chat themes** integrated into Agnostr's theme picker;
 - **12 retro message chimes and 12 retro client click sounds**, with per-event chime toggles;
 - **Hug / Slap / Custom action** items in the message right-click menu;
-- **categorized emoji pickers** with 2,300+ base emoji for the composer, the hover reaction popover, and the right-click reaction row;
+- a **categorized emoji picker** with 2,300+ base emoji for the composer;
 - **custom fonts** (three bundled, plus popular system families and custom family/URL);
 - a green **Better Agnostr** avatar marker alongside Agnostr's own blue marker;
 - Locate Me removal, teleport-tag control, call-button blocking, and a simplified app shell.
@@ -155,7 +155,7 @@ The line preview is a real Agnostr-style row using your default identicon. It re
 - a **Voice memo button** visibility toggle;
 - a compactness/collapse control for the composer formatting panel. The formatting panel is collapsed by default and opens from the small **Aa** button beside the composer.
 
-The composer formatting panel no longer contains the line-editor or last-event shortcuts. It only carries the formatting controls and the colour picker. The composer has a separate emoji button. Both the hover reaction popover and the right-click reaction row get a **＋** button that opens the categorized emoji grid; picking an emoji sends a reaction through Agnostr's own reaction pipeline. The grid groups emoji into Smileys, People, Nature, Food, Activities, Travel, Objects, Symbols, and Flags tabs. The category bar is a fixed header and the emoji grid scrolls underneath it without overlapping. Opening the full picker from the hover reaction popover closes the native quick-reaction popover instead of leaving it stuck open. The Better Agnostr settings tabs and buttons use the same segmented-control and button styling as native Agnostr.
+The composer formatting panel no longer contains the line-editor or last-event shortcuts. It only carries the formatting controls and the colour picker. The composer has a separate emoji button that opens the categorized emoji grid. The grid groups emoji into Smileys, People, Nature, Food, Activities, Travel, Objects, Symbols, and Flags tabs. The category bar is a fixed header and the emoji grid scrolls underneath it without overlapping. The Better Agnostr settings tabs and buttons use the same segmented-control and button styling as native Agnostr.
 
 
 
@@ -206,7 +206,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.0.2.zip
+node build.mjs       # writes dist/ and better-agnostr-1.0.3.zip
 ```
 
 Source layout:

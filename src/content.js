@@ -91,9 +91,7 @@ const state = {
   decoratedRows: new Set(),
   richApplied: new WeakMap(),
   betterPeers: new Map(),
-  emojiTarget: null,
   emojiCategory: "smileys",
-  suppressEmojiHide: false,
   pendingLookups: new Set(),
   enhanceTimer: null,
   saveTimer: null,
@@ -1267,7 +1265,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.0.2";
+  const version = manifest.version || "1.0.3";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1860,26 +1858,10 @@ document.addEventListener(
     if (emojiTrigger) {
       event.preventDefault();
       event.stopPropagation();
-      const rowId = emojiTrigger.getAttribute("data-ba-row-id");
-      if (rowId) {
-        const ev = eventById(rowId);
-        state.contextTarget = { id: rowId, event: ev, mention: ev ? eventHandle(ev) : "" };
-      }
-      openEmojiPicker(emojiTrigger, emojiTrigger.getAttribute("data-ba-emoji-trigger"));
-      const nativePopover = emojiTrigger.closest(".ag-emoji-popover");
-      if (nativePopover) {
-        const actions = nativePopover.closest(".ag-msg-actions");
-        const reactBtn = actions?.querySelector('[aria-label="Add reaction"]');
-        state.suppressEmojiHide = true;
-        reactBtn?.click();
-        nativePopover.style.display = "none";
-        actions?.classList.remove("picker-open");
-      }
+      openEmojiPicker(emojiTrigger);
       return;
     }
-    if (state.suppressEmojiHide) {
-      state.suppressEmojiHide = false;
-    } else if (!target.closest(".ba-emoji-popover") && !target.closest("[data-ba-emoji-trigger]")) {
+    if (!target.closest(".ba-emoji-popover") && !target.closest("[data-ba-emoji-trigger]")) {
       hideEmojiPicker();
     }
     const formatToggle = target.closest("[data-ba-format-toggle]");
@@ -3049,7 +3031,6 @@ function enhanceAll() {
   ensureSuiteButton();
   ensureToolbars();
   ensureComposerEmoji();
-  enhanceEmojiReactionPopover();
   decorateRows();
   enhanceContextMenu();
   markBetterClients();
@@ -3282,7 +3263,6 @@ function emojiPicker() {
 function hideEmojiPicker() {
   const pop = document.querySelector(".ba-emoji-popover");
   if (pop) pop.hidden = true;
-  state.emojiTarget = null;
 }
 
 function positionEmojiPicker(anchor) {
@@ -3299,8 +3279,7 @@ function positionEmojiPicker(anchor) {
   pop.style.top = `${Math.round(top)}px`;
 }
 
-function openEmojiPicker(anchor, target) {
-  state.emojiTarget = target;
+function openEmojiPicker(anchor) {
   const pop = emojiPicker();
   if (!pop.hidden) {
     const same = state.emojiAnchor === anchor;
@@ -3315,23 +3294,7 @@ function openEmojiPicker(anchor, target) {
 }
 
 function insertEmoji(emoji) {
-  const target = state.emojiTarget;
-  if (target === "composer") {
-    insertInto(composerTextarea(), emoji);
-  } else if (target === "reaction") {
-    const context = state.contextTarget;
-    if (!context?.id) {
-      toast("warning", "No message target", "Right-click a message first.");
-      return;
-    }
-    sendPage("react", {
-      id: context.id,
-      pubkey: context.event?.pubkey || "",
-      geohash: getTagValue(context.event?.tags, "g") || "",
-      emoji,
-    });
-    closeContextMenu();
-  }
+  insertInto(composerTextarea(), emoji);
   hideEmojiPicker();
 }
 
@@ -3395,24 +3358,6 @@ function ensureToolbars() {
     }
     const bar = head.querySelector(".ba-composer-bar");
     if (bar) bar.hidden = state.settings.studio.showComposerToolbar === false;
-  }
-}
-
-function enhanceEmojiReactionPopover() {
-  for (const pop of document.querySelectorAll(".ag-emoji-popover")) {
-    if (pop.querySelector("[data-ba-emoji-trigger='reaction']")) continue;
-    const actions = pop.closest(".ag-msg-actions");
-    const row = actions?.closest(".ag-msg-row");
-    const id = row?.id?.startsWith("msg-") ? row.id.slice(4) : "";
-    const more = document.createElement("button");
-    more.type = "button";
-    more.className = "ag-emoji-more ba-emoji-more";
-    more.setAttribute("data-ba-emoji-trigger", "reaction");
-    more.setAttribute("data-ba-row-id", id);
-    more.setAttribute("aria-label", "More reactions");
-    more.title = "More reactions";
-    more.textContent = "＋";
-    pop.appendChild(more);
   }
 }
 
@@ -4163,17 +4108,6 @@ function enhanceContextMenu() {
     btn.append(iconEl, labelEl);
     return btn;
   };
-  const reactions = menu.querySelector(".ag-ctx-reactions");
-  if (reactions && !reactions.querySelector("[data-ba-emoji-trigger='reaction']")) {
-    const more = document.createElement("button");
-    more.type = "button";
-    more.className = "ag-ctx-react-btn ba-emoji-more";
-    more.setAttribute("data-ba-emoji-trigger", "reaction");
-    more.setAttribute("aria-label", "More reactions");
-    more.title = "More reactions";
-    more.textContent = "＋";
-    reactions.append(more);
-  }
   const divider = document.createElement("div");
   divider.className = "ag-ctx-divider";
   divider.setAttribute("data-ba-actions", "1");
@@ -4426,7 +4360,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.0.2";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.0.3";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4443,7 +4377,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.0.2"}`, 
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.0.3"}`, 
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
