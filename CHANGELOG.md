@@ -2,6 +2,17 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.4 — Performance and suite menu flash
+
+- Cut idle content-script work by filtering the page MutationObserver to relevant UI changes.
+- Paused the observer during the extension's own DOM updates to prevent feedback loops.
+- Cached per-row decoration so unchanged message rows are not reprocessed.
+- Throttled call-control, Better Agnostr plaque, and Bitchat-label maintenance work.
+- Cached obfuscated-text targets instead of scanning the whole document every 70 ms.
+- Deferred enhancement work while the tab is hidden.
+- Reduced event and relay-log memory caps to keep long sessions lighter.
+- Prevented the Agnostr Suite from flashing its old Map/Search utilities and Bitchat label by normalizing them with CSS before first paint.
+
 ## 1.1.3 — Client plaques, teleport visuals, and hover cleanup
 
 - Replaced the extension's green Better Agnostr avatar border with a small **BA** plaque next to usernames.
