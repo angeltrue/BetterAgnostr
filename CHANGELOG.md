@@ -2,6 +2,16 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.5 — Call cleanup, mobile polish, and group switcher
+
+- Removed Room Info call sections and call action buttons entirely while call blocking is enabled.
+- Added immediate CSS hiding and a capture click blocker for call controls that render late.
+- Removed the redundant **Public chat** button. Use the Agnostr Suite's **Chat** card instead.
+- Fixed the groups-page switcher for Agnostr's current group pane layout and refreshed it after group changes.
+- Mobile: hid the redundant suite triggers and floating BA button.
+- Mobile: renamed the **Bitchat** tab label to **Chat**.
+- Mobile: keeps the Room Info call section hidden and the composer free of the floating shortcut.
+
 ## 1.1.4 — Performance and suite menu flash
 
 - Cut idle content-script work by filtering the page MutationObserver to relevant UI changes.

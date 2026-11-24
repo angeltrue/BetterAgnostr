@@ -631,6 +631,29 @@ html.ba-calls-hidden button[title^="Join Call" i],
 html.ba-calls-hidden button[title^="Answer Call" i] {
   display: none !important;
 }
+html.ba-calls-hidden .ag-sheet-call-card,
+html.ba-calls-hidden .ag-sheet-section:has(.ag-sheet-call-card),
+html.ba-calls-hidden .ag-sheet-action-btn:has(svg[class*="lucide-phone"]),
+html.ba-calls-hidden .ag-sheet-action-btn:has(svg[class*="lucide-video"]),
+html.ba-calls-hidden .ag-ctx-item:has(svg[class*="lucide-phone"]),
+html.ba-calls-hidden .ag-ctx-item:has(svg[class*="lucide-video"]),
+html.ba-calls-hidden .ag-ctx-item[data-ba-call-disabled="1"],
+html.ba-calls-hidden button[aria-label*="voice call" i],
+html.ba-calls-hidden button[aria-label*="video call" i],
+html.ba-calls-hidden button[aria-label*="start call" i],
+html.ba-calls-hidden button[aria-label*="join call" i],
+html.ba-calls-hidden button[aria-label*="answer call" i],
+html.ba-calls-hidden button[aria-label*="leave call" i],
+html.ba-calls-hidden button[aria-label*="end call" i],
+html.ba-calls-hidden button[title*="voice call" i],
+html.ba-calls-hidden button[title*="video call" i],
+html.ba-calls-hidden button[title*="start call" i],
+html.ba-calls-hidden button[title*="join call" i],
+html.ba-calls-hidden button[title*="answer call" i],
+html.ba-calls-hidden button[title*="leave call" i],
+html.ba-calls-hidden button[title*="end call" i] {
+  display: none !important;
+}
 html.ba-calls-hidden .ag-ctx-item:has(.ag-ctx-item-label) {
   /* Actual removal happens in JS; this is only a fallback. */
 }
@@ -1337,28 +1360,6 @@ html.ba-hide-locate button[title^="Locate" i] {
 .ba-emoji-item:hover { background: var(--bg-hover); }
 .ba-emoji-btn { color: var(--text-secondary); }
 
-/* Return to the public Bitchat/geohash chat from a group conversation. */
-button.ag-circle-btn.ba-public-chat-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: auto;
-  height: 32px;
-  padding: 0 11px;
-  border-radius: 999px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-button.ag-circle-btn.ba-public-chat-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--accent);
-}
-button.ag-circle-btn.ba-public-chat-btn svg { flex: 0 0 auto; }
-
 
 /* Normalize the native suite before its first paint so old Map/Search
    utilities and the Bitchat label never flash. */
@@ -1484,6 +1485,14 @@ html.ba-group-rail-open .ag-shell-body {
 @media (max-width: 899px) {
   html.ba-group-rail-open .ag-shell-body { padding-left: 0; }
   .ba-group-rail { display: none; }
+  .ba-suite-trigger { display: none !important; }
+  .ag-mtab-btn:has(svg[class*="lucide-waves"]) .ag-mtab-label { font-size: 0; }
+  .ag-mtab-btn:has(svg[class*="lucide-waves"]) .ag-mtab-label::after {
+    content: "Chat";
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.1;
+  }
 }
 
 html.ba-group-rail-open:has(.ag-settings-modal) .ag-shell-body,

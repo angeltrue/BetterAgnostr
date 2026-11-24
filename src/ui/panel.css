@@ -50,37 +50,6 @@ a {
 }
 
 /* --- launcher ------------------------------------------------------------- */
-.ba-fab {
-  position: fixed;
-  right: max(14px, env(safe-area-inset-right, 0px));
-  bottom: calc(74px + env(safe-area-inset-bottom, 0px));
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--ba-accent) 45%, var(--ba-border));
-  background: color-mix(in srgb, var(--ba-elevated) 92%, var(--ba-accent));
-  color: var(--ba-accent);
-  box-shadow: var(--ba-shadow);
-  pointer-events: auto;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 3;
-}
-.ba-fab:hover {
-  color: var(--ba-text);
-  border-color: var(--ba-accent);
-}
-@media (max-width: 899px) {
-  .ba-fab {
-    display: flex;
-  }
-}
-.ba-fab svg {
-  width: 19px;
-  height: 19px;
-}
-
 /* --- backdrop & panel ----------------------------------------------------- */
 .ba-backdrop {
   position: fixed;
