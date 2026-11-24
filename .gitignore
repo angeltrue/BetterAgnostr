@@ -1,0 +1,8 @@
+node_modules/
+dist/
+web-ext-artifacts/
+*.log
+/better-agnostr-*.zip
+/better-agnostr-*.xpi
+.release/
+.gitlab-token

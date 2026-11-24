@@ -1,0 +1,32 @@
+{
+  "name": "better-agnostr",
+  "version": "1.0.0",
+  "description": "Firefox extension for agnostr.com: JSON viewer, Glub line/flair studio, client spoofing, retro sounds, privacy scrubber, call blocking.",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "npm run build && web-ext run --source-dir dist",
+    "lint": "eslint --no-config-lookup --parser-options '{\"ecmaVersion\":2023,\"sourceType\":\"module\"}' --global 'window,document,console,setTimeout,clearTimeout,setInterval,clearInterval,crypto,localStorage,Node,NodeFilter,Element,HTMLElement,HTMLInputElement,HTMLTextAreaElement,CustomEvent,MessageEvent,Blob,URL,location,navigator,chrome,browser,fetch,WeakMap,WeakSet,Map,Set,DataView,TextEncoder,TextDecoder,Uint8Array,ArrayBuffer,structuredClone,performance,HTMLCanvasElement,Image,Worker,indexedDB,DOMParser,FileReader,RTCPeerConnection,MediaStream,MediaRecorder,AudioContext,Event,KeyboardEvent,MouseEvent,PointerEvent,MutationObserver,IntersectionObserver,globalThis' --rule '{\"no-undef\":\"error\",\"no-unused-vars\":\"warn\",\"no-redeclare\":\"error\"}' src/content.js src/page.js src/lib/glub.js src/lib/settings.js src/background.js src/popup.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "private": "true",
+  "type": "module",
+  "devDependencies": {
+    "@fontsource/atkinson-hyperlegible": "^5.2.8",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
+    "@fontsource/lexend": "^5.2.8",
+    "esbuild": "^0.25.10",
+    "eslint": "^9.39.1",
+    "web-ext": "^8.9.0"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0",
+    "nostr-tools": "^2.17.0"
+  }
+}

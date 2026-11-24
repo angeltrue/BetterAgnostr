@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Better Agnostr</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="mark">✦</div>
+        <div>
+          <h1>Better Agnostr</h1>
+          <p id="subtitle">checking the page…</p>
+        </div>
+      </header>
+
+      <label class="enable-row">
+        <span>
+          <strong>Enable Better Agnostr</strong>
+          <small>Reloads this tab</small>
+        </span>
+        <input type="checkbox" id="enabled" class="switch" checked />
+      </label>
+
+      <div class="status">
+        <div class="row"><span>signer</span><strong id="signer">—</strong></div>
+        <div class="row"><span>glub build</span><strong id="build">—</strong></div>
+        <div class="row"><span>events</span><strong id="events">—</strong></div>
+      </div>
+
+      <div class="actions">
+        <button id="openPanel" class="primary">Open settings</button>
+        <button id="openSite">Open agnostr.com</button>
+      </div>
+
+      <p class="hint">
+        Settings live in <strong>Agnostr → Better Agnostr</strong>. Hover a
+        message and click <code>{ }</code> to inspect its signed event.
+      </p>
+
+      <footer>
+        <span>v1.0.0</span>
+        <button id="syncBuild" class="link">sync glub build</button>
+      </footer>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
