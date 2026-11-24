@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Better Agnostr",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Message JSON inspector, Glub line/flair studio, client spoofing, retro sounds, privacy scrubber, and call blocking for agnostr.com.",
   "author": "Better Agnostr",
   "browser_specific_settings": {

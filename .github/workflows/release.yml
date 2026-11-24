@@ -14,10 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Determine version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Locate release notes
         id: notes
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${{ steps.version.outputs.version }}"
           FILE="release/RELEASE_NOTES-${TAG}.md"
           if [ -f "$FILE" ]; then
             echo "file=$FILE" >> "$GITHUB_OUTPUT"
@@ -31,6 +35,6 @@ jobs:
           name: Better Agnostr ${{ github.ref_name }}
           body_path: ${{ steps.notes.outputs.file }}
           files: |
-            release/better-agnostr-*.xpi
-            release/better-agnostr-*.zip
+            release/better-agnostr-${{ steps.version.outputs.version }}.xpi
+            release/better-agnostr-${{ steps.version.outputs.version }}.zip
           fail_on_unmatched_files: true

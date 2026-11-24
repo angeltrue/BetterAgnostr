@@ -1,3 +1,18 @@
+# 🚨🚨🚨 **UNSIGNED BUILD WARNING** 🚨🚨🚨
+
+## **THE XPI IN THIS REPOSITORY AND ITS RELEASES IS UNSIGNED.**
+
+> [!WARNING]
+> **Firefox Release and ESR will refuse to install this extension permanently unless it is signed by Mozilla.**
+>
+> **The files here are for temporary installation, local development, manual review, or AMO signing.**
+>
+> **To install permanently in standard Firefox, sign the package through addons.mozilla.org first.**
+>
+> **Never assume an unsigned XPI is safe just because it is attached to a release.**
+
+---
+
 # 🚨🚨🚨 **AI USAGE WARNING** 🚨🚨🚨
 
 ## **THIS PROJECT WAS BUILT WITH GENERATIVE AI ASSISTANCE.**
@@ -117,7 +132,7 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 
 **Settings → Notifications** gains **Better Agnostr sounds** directly below the native sound section: message-chime and UI-click presets, volume, chat/mention/DM/call toggles, UI clicks, and test buttons. The native **Message chimes** switch remains the on/off control for message chimes.
 
-**Settings → About** is the last entry in the native navigation. It shows the Agnostr logo, an **Agnostr** label, the current web build, `with Better Agnostr version 1.0.0`, Agnostr credits (hinsley + GitHub), and Better Agnostr credits (Angel + [github.com/angeltrue/BetterAgnostr](https://github.com/angeltrue/BetterAgnostr)). Angel is linked to the profile for `npub1t9kl0mq3f8pesupc9nqndpq389af4czsk7nnpvr5g6kg9hyenxvssjs0yk` and opens that key in Agnostr’s own peer profile modal, using the same opener as clicking an avatar in chat.
+**Settings → About** is the last entry in the native navigation. It shows the Agnostr logo, an **Agnostr** label, the current web build, the current Better Agnostr version, Agnostr credits (hinsley + GitHub), and Better Agnostr credits (Angel + [github.com/angeltrue/BetterAgnostr](https://github.com/angeltrue/BetterAgnostr)). Angel is linked to the profile for `npub1t9kl0mq3f8pesupc9nqndpq389af4czsk7nnpvr5g6kg9hyenxvssjs0yk` and opens that key in Agnostr’s own peer profile modal, using the same opener as clicking an avatar in chat.
 
 **Settings → Appearance** includes:
 
@@ -191,7 +206,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.0.0.zip
+node build.mjs       # writes dist/ and better-agnostr-1.0.1.zip
 ```
 
 Source layout:

@@ -1,6 +1,12 @@
 const api = globalThis.browser ?? globalThis.chrome;
 const STORAGE_KEY = "betterAgnostr.settings.v1";
 
+try {
+  const version = api.runtime.getManifest().version;
+  const el = document.getElementById("extensionVersion");
+  if (el) el.textContent = `v${version}`;
+} catch {}
+
 async function activeTab() {
   try {
     const tabs = await api.tabs.query({ active: true, currentWindow: true });

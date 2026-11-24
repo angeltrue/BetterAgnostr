@@ -1267,7 +1267,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.0.0";
+  const version = manifest.version || "1.0.1";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -2835,8 +2835,7 @@ function findNativeSettingsButton() {
   if (visible) return visible;
   const hiddenNative = document.querySelector("[data-ba-hidden-native-settings]");
   if (hiddenNative) return hiddenNative;
-  const profile = document.querySelector(".ag-profile-bar-btn");
-  return profile || candidates[0] || null;
+  return candidates[0] || null;
 }
 
 function openBetterSettings(tab = "line") {
@@ -3088,10 +3087,13 @@ function ensureHeaderButtons() {
 
   const footer = document.querySelector(".ag-conv-footer-actions");
   if (!footer) return;
+  footer.classList.remove("ag-mobile-only");
+  footer.style.removeProperty("display");
   const nativeSettings = footer.querySelector('button[aria-label="Settings"]');
   if (nativeSettings) {
-    nativeSettings.style.display = "none";
-    nativeSettings.setAttribute("data-ba-hidden-native-settings", "1");
+    nativeSettings.classList.remove("ag-mobile-only");
+    nativeSettings.style.removeProperty("display");
+    nativeSettings.removeAttribute("data-ba-hidden-native-settings");
   }
   let shortcut = footer.querySelector("[data-ba-settings-shortcut]");
   if (state.settings.ui.showButton === false) {
@@ -3125,15 +3127,18 @@ function ensureSuiteButton() {
       continue;
     }
     const text = (btn.textContent || "").trim();
-    if (/^(settings|radar map|search|better)/i.test(text)) {
+    if (/^(radar map|search|better)/i.test(text)) {
       btn.style.display = "none";
       btn.setAttribute("data-ba-suite-util-hidden", "1");
+    } else if (/^settings/i.test(text)) {
+      btn.style.removeProperty("display");
+      btn.removeAttribute("data-ba-suite-util-hidden");
     }
   }
   if (!footer) return;
-  footer.style.display = "none";
+  footer.style.removeProperty("display");
   const prev = footer.previousElementSibling;
-  if (prev?.classList.contains("ag-suite-divider")) prev.style.display = "none";
+  if (prev?.classList.contains("ag-suite-divider")) prev.style.removeProperty("display");
   if (document.querySelector(".ag-suite-popover")) scheduleSuitePosition();
 }
 
@@ -4301,8 +4306,9 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
+  const extensionVersion = api.runtime.getManifest?.().version || "1.0.1";
   el.innerHTML = `
-    <div class="ba-kv"><span>extension</span><span>1.0.0</span></div>
+    <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
     <div class="ba-kv"><span>sign mode</span><span>${h(status.signMode || "unknown")}</span></div>
     <div class="ba-kv"><span>signer hooked</span><span>${status.signerHooked ? "yes" : "no"}</span></div>
@@ -4317,7 +4323,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    "Better Agnostr 1.0.0",
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.0.1"}`, 
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
