@@ -41,7 +41,7 @@ A Firefox extension for **agnostr.com** that adds:
 - **12 retro message chimes and 12 retro client click sounds**, with per-event chime toggles;
 - **Hug / Slap / Custom action** items in the message right-click menu;
 - a **categorized emoji picker** with 2,300+ base emoji for the composer;
-- **custom fonts** (three bundled, plus popular system families and custom family/URL);
+- **custom fonts** (three sans and six serif families bundled, plus popular system families and custom family/URL);
 - a green **Better Agnostr** avatar marker alongside Agnostr's own blue marker;
 - Locate Me removal, teleport-tag control, call-button blocking, and a simplified app shell.
 
@@ -84,7 +84,7 @@ Older messages are reconstructed from Agnostr's local message store when the raw
 
 ### Glub line and flair
 
-Open **Agnostr Settings → Better Agnostr → line** (or use the optional sparkle shortcut in the profile footer, or the floating button on mobile).
+Open **Agnostr Settings → Better Agnostr → line** (or use the **Better Agnostr** entry in the Agnostr Suite, or the floating button on mobile).
 
 - **Line format** supports glub's `&` codes: `&l` bold, `&o` italic, `&n` underline, `&m` strike, `&k` obfuscate, `&g` rainbow, `&r` reset, and the `&0`–`&f` colors.
 - Placeholders are `{name}`, `{tag}`, and `{msg}`. A template without `{msg}` gets the message appended by glub.
@@ -126,7 +126,7 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 
 - **line** — template, colours, codes, flair, live preview, rendering toggles;
 - **client** — client tag and per-event policies;
-- **general** — settings-shortcut and voice-memo visibility, composer-panel state, and the custom action default.
+- **general** — suite-shortcut and voice-memo visibility, composer-panel state, and the custom action default.
 
 **Settings → Privacy & Trust** gains a **Better Agnostr** group with Locate Me, teleport, tracking-parameter scrubbing, review-before-signing, call blocking, and tag-removal controls.
 
@@ -138,9 +138,9 @@ Some DM and mesh events are sealed with ephemeral keys. Those cannot be rewritte
 
 - all eleven Glub.chat themes: Chat, Cyberpunk 2077, Blade Runner, Ex Machina, Giedi Prime, Matrix Neo, Star-Lord, Time Variance, Tron Legacy, Lumon Light, and Her Light;
 - a custom CSS box;
-- a **Font** picker with bundled IBM Plex Sans, Atkinson Hyperlegible, and Lexend, popular system families, and custom family/URL support.
+- a **Font** picker with bundled IBM Plex Sans, Atkinson Hyperlegible, Lexend, and six serif families (Playfair Display, Cormorant Garamond, Libre Baskerville, Lora, Fraunces, Instrument Serif), popular system families, and custom family/URL support.
 
-The app rail is hidden. The **Agnostr Suite** button is available in every workspace header: Chat, Agora, Agmail, and Agwallet, and its popover is positioned next to the button in every workspace. The suite popover no longer carries duplicate Better, Map, or Search utilities. Group conversations show a **Public chat** button in the conversation header, and the suite’s **Chat** card also leaves a group and returns to public chat, so hiding the rail never traps you in a group. In the Chat profile footer, a dedicated Settings button sits directly next to the profile chip and opens Agnostr’s native Settings menu. The Better Agnostr sparkle shortcut sits beside it. Agnostr’s own mobile-only footer actions remain hidden.
+The native app rail is hidden. The **Agnostr Suite** button is available in every workspace header: Chat, Agora, Agmail, and Agwallet. On the groups page, a slim group switcher replaces the hidden app rail and keeps the suite button inline with the joined-group buttons and a create/join shortcut. The suite footer carries **Better Agnostr** next to **Settings**, so the settings shortcut is available on every page without a profile-footer button. The suite popover no longer carries duplicate Map or Search utilities. Group conversations show a **Public chat** button in the conversation header, and the suite’s **Chat** card also leaves a group and returns to public chat. Agnostr’s own mobile-only footer actions remain hidden.
 
 The toolbar popup has an **Enable Better Agnostr** switch. Turning it off reloads the current Agnostr tab without the extension UI or outgoing-event changes; turning it back on reloads the tab with the extension active.
 
@@ -189,7 +189,7 @@ The Glub.chat theme grid, font picker, and custom CSS box live in **Agnostr Sett
 
 ## Credits
 
-Glub flair CSS/markup is adapted from glub.chat's own `flair.js` and stylesheet so the effects match on both clients. Glub theme colours are ported from glub.chat's theme blocks. Bundled fonts are IBM Plex Sans, Atkinson Hyperlegible, and Lexend under the SIL Open Font License (licences in `src/fonts/`). The in-app About page credits Agnostr to hinsley and Better Agnostr to Angel.
+Glub flair CSS/markup is adapted from glub.chat's own `flair.js` and stylesheet so the effects match on both clients. Glub theme colours are ported from glub.chat's theme blocks. Bundled fonts are IBM Plex Sans, Atkinson Hyperlegible, Lexend, Playfair Display, Cormorant Garamond, Libre Baskerville, Lora, Fraunces, and Instrument Serif under the SIL Open Font License (licences in `src/fonts/`). The in-app About page credits Agnostr to hinsley and Better Agnostr to Angel.
 
 ## Security notes
 
@@ -206,7 +206,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.0.3.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.0.zip
 ```
 
 Source layout:

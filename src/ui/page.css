@@ -736,15 +736,13 @@ html.ba-calls-hidden .ag-ctx-item:has(.ag-ctx-item-label) {
 .ag-app-rail {
   display: none !important;
 }
-.ba-suite-trigger,
-.ba-settings-shortcut {
+.ba-suite-trigger {
   color: var(--text-secondary);
 }
 .ag-wallet-stage-header .ba-suite-trigger { margin-left: auto; }
 .ag-amail-top-actions .ba-suite-trigger,
 .ag-agora-header-actions .ba-suite-trigger { flex: 0 0 auto; }
-.ba-suite-trigger:hover,
-.ba-settings-shortcut:hover {
+.ba-suite-trigger:hover {
   color: var(--accent);
 }
 html.ba-hide-locate .ba-locate-hidden {
@@ -1326,17 +1324,6 @@ html.ba-hide-locate .ba-locate-hidden {
 .ba-emoji-item:hover { background: var(--bg-hover); }
 .ba-emoji-btn { color: var(--text-secondary); }
 
-/* Settings opener next to the profile button. */
-.ba-footer-controls {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex: 0 0 auto;
-}
-.ba-native-settings-btn { color: var(--text-secondary); }
-.ba-native-settings-btn:hover { color: var(--text-primary); }
-
-
 /* Return to the public Bitchat/geohash chat from a group conversation. */
 button.ag-circle-btn.ba-public-chat-btn {
   display: inline-flex;
@@ -1358,3 +1345,125 @@ button.ag-circle-btn.ba-public-chat-btn:hover {
   border-color: var(--accent);
 }
 button.ag-circle-btn.ba-public-chat-btn svg { flex: 0 0 auto; }
+
+
+/* Better Agnostr lives in the Agnostr Suite footer and keeps native spacing. */
+.ag-suite-footer.ba-suite-footer-dynamic {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+.ba-suite-better {
+  min-width: 0;
+}
+.ba-suite-better svg {
+  color: var(--accent);
+}
+.ba-suite-better span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Simplified group switcher on the groups page. The native rail stays hidden. */
+html.ba-group-rail-open .ag-shell-body {
+  padding-left: 52px;
+}
+.ba-group-rail {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 52px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  border-right: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-canvas) 94%, var(--bg-elevated));
+}
+.ba-group-rail::-webkit-scrollbar { display: none; }
+.ba-group-rail-btn {
+  position: relative;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ba-group-rail-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+.ba-group-rail-btn.is-active {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.ba-group-rail-btn.ba-group-suite {
+  color: var(--accent);
+}
+.ba-group-rail-btn.ba-group-rail-add {
+  border-style: dashed;
+}
+.ba-group-rail-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.ba-group-rail-glyph {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+.ba-group-rail-glyph.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.ba-group-rail-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg-canvas);
+  font: 700 9px/16px var(--font-mono);
+  text-align: center;
+}
+.ba-group-rail-divider {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 1px;
+  margin: 2px 0;
+  background: var(--border-subtle);
+}
+
+@media (max-width: 899px) {
+  html.ba-group-rail-open .ag-shell-body { padding-left: 0; }
+  .ba-group-rail { display: none; }
+}
+
+html.ba-group-rail-open:has(.ag-settings-modal) .ag-shell-body,
+html.ba-group-rail-open:has(.ag-srv-modal) .ag-shell-body {
+  padding-left: 0;
+}
+html.ba-group-rail-open:has(.ag-settings-modal) .ba-group-rail,
+html.ba-group-rail-open:has(.ag-srv-modal) .ba-group-rail {
+  display: none;
+}

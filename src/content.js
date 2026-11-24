@@ -43,6 +43,12 @@ const FONT_PRESETS = [
   { id: "plex", label: "IBM Plex Sans", stack: "'BA IBM Plex Sans', 'IBM Plex Sans', sans-serif" },
   { id: "atkinson", label: "Atkinson Hyperlegible", stack: "'BA Atkinson', 'Atkinson Hyperlegible', sans-serif" },
   { id: "lexend", label: "Lexend", stack: "'BA Lexend', Lexend, sans-serif" },
+  { id: "playfair", label: "Playfair Display", stack: "'BA Playfair', 'Playfair Display', Georgia, serif" },
+  { id: "cormorant", label: "Cormorant Garamond", stack: "'BA Cormorant', 'Cormorant Garamond', Georgia, serif" },
+  { id: "baskerville", label: "Libre Baskerville", stack: "'BA Baskerville', 'Libre Baskerville', Georgia, serif" },
+  { id: "lora", label: "Lora", stack: "'BA Lora', Lora, Georgia, serif" },
+  { id: "fraunces", label: "Fraunces", stack: "'BA Fraunces', Fraunces, Georgia, serif" },
+  { id: "instrument", label: "Instrument Serif", stack: "'BA Instrument', 'Instrument Serif', Georgia, serif" },
   { id: "noto", label: "Noto Sans", stack: "'Noto Sans', system-ui, sans-serif" },
   { id: "source", label: "Source Sans 3", stack: "'Source Sans 3', 'Source Sans Pro', sans-serif" },
   { id: "fira", label: "Fira Sans", stack: "'Fira Sans', system-ui, sans-serif" },
@@ -787,6 +793,17 @@ function applyFont() {
 @font-face{font-family:"BA Atkinson";src:url("${api.runtime.getURL("fonts/atkinson-700.woff2")}") format("woff2");font-weight:700;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Lexend";src:url("${api.runtime.getURL("fonts/lexend-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Lexend";src:url("${api.runtime.getURL("fonts/lexend-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Playfair";src:url("${api.runtime.getURL("fonts/playfair-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Playfair";src:url("${api.runtime.getURL("fonts/playfair-700.woff2")}") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Cormorant";src:url("${api.runtime.getURL("fonts/cormorant-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Cormorant";src:url("${api.runtime.getURL("fonts/cormorant-700.woff2")}") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Baskerville";src:url("${api.runtime.getURL("fonts/baskerville-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Baskerville";src:url("${api.runtime.getURL("fonts/baskerville-700.woff2")}") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Lora";src:url("${api.runtime.getURL("fonts/lora-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Lora";src:url("${api.runtime.getURL("fonts/lora-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Fraunces";src:url("${api.runtime.getURL("fonts/fraunces-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Fraunces";src:url("${api.runtime.getURL("fonts/fraunces-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Instrument";src:url("${api.runtime.getURL("fonts/instrument-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 `;
   let extra = "";
   let stack = family.stack || "";
@@ -1042,7 +1059,7 @@ function betterClientHtml() {
 function betterGeneralHtml() {
   return `
     <div class="ag-set-group">
-      ${baToggle("ui.showButton", "Show settings shortcut", "Sparkle button in the conversation footer")}
+      ${baToggle("ui.showButton", "Show Better Agnostr shortcut", "Adds Better Agnostr to the Agnostr Suite")}
       ${baToggle("ui.showVoiceMemo", "Voice memo button")}
     </div>
     <div class="ag-set-group">
@@ -1265,7 +1282,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.0.3";
+  const version = manifest.version || "1.1.0";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1546,7 +1563,7 @@ function injectAppearanceExtras(modal) {
         </select></div>
         <div class="ba-set-field"><span>Custom family</span><input class="ag-input" data-ba-setting="font.customFamily" maxlength="80" value="${h(state.settings.font.customFamily)}" placeholder="installed family name"></div>
         <div class="ba-set-field"><span>Custom URL</span><input class="ag-input" data-ba-setting="font.customUrl" maxlength="500" value="${h(state.settings.font.customUrl)}" placeholder="https://…/font.woff2"></div>
-        <div class="ba-set-note">IBM Plex, Atkinson Hyperlegible, and Lexend are bundled.</div>
+        <div class="ba-set-note">IBM Plex, Atkinson Hyperlegible, Lexend, and six serif families are bundled.</div>
       </div>`;
       fontGroup = holder.firstElementChild;
       cssGroup.after(fontGroup);
@@ -1569,8 +1586,8 @@ function shootStar(el) {
   const offsetY = Math.max(0, lineRect.top - rowRect.top);
   const starW = 44;
   const angle = 6 + Math.random() * 12;
-  const x0 = offsetX + 2;
-  const x1 = offsetX + Math.max(starW + 1, Math.min(w - starW - 1, w * 0.62));
+  const x0 = offsetX - starW + 2;
+  const x1 = offsetX + Math.max(starW + 1, Math.min(w - starW - 1, w * 0.72));
   const y0 = offsetY + 2 + Math.random() * Math.max(1, h * 0.18);
   const drop = Math.min(
     Math.max(2, h - 4),
@@ -1836,6 +1853,13 @@ document.addEventListener(
   (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
+    const suiteBetter = target.closest("[data-ba-suite-better]");
+    if (suiteBetter) {
+      event.preventDefault();
+      event.stopPropagation();
+      openBetterSettings(state.betterTab || "line");
+      return;
+    }
     const emojiTab = target.closest("[data-ba-emoji-tab]");
     if (emojiTab) {
       event.preventDefault();
@@ -2854,8 +2878,6 @@ function findNativeSettingsButton() {
   const candidates = [...document.querySelectorAll("button")].filter(
     (b) =>
       !b.closest(".ba-composer-bar") &&
-      !b.hasAttribute("data-ba-settings-shortcut") &&
-      !b.hasAttribute("data-ba-settings-opener") &&
       !b.hasAttribute("data-ba-suite-better") &&
       /settings/i.test(`${b.getAttribute("aria-label") || ""} ${b.title || ""} ${b.textContent || ""}`),
   );
@@ -3027,6 +3049,7 @@ function enhanceAll() {
   applyCallButtons();
   hideCallUi();
   markLocateButtons();
+  ensureGroupRail();
   ensureHeaderButtons();
   ensureSuiteButton();
   ensureToolbars();
@@ -3042,6 +3065,7 @@ function applyShortcutVisibility() {
   const show = state.settings.ui.showButton !== false;
   document.documentElement.classList.toggle("ba-hide-rail-shortcut", !show);
   for (const node of document.querySelectorAll("[data-ba-rail], .ba-rail-slot")) node.remove();
+  ensureGroupRail();
   ensureHeaderButtons();
   const fab = state.shadow?.querySelector(".ba-fab");
   if (fab) fab.style.display = show ? "" : "none";
@@ -3054,8 +3078,9 @@ function positionSuitePopover() {
   const rect = trigger.getBoundingClientRect();
   const box = pop.getBoundingClientRect();
   const margin = 10;
-  let left = rect.right - box.width;
-  if (left < margin) left = rect.left;
+  const fromRail = !!trigger.closest(".ba-group-rail");
+  let left = fromRail ? rect.right + 10 : rect.right - box.width;
+  if (!fromRail && left < margin) left = rect.left;
   left = Math.max(margin, Math.min(left, window.innerWidth - box.width - margin));
   let top = rect.bottom + 8;
   if (top + box.height > window.innerHeight - margin) {
@@ -3088,10 +3113,173 @@ function returnToPublicChat() {
   return true;
 }
 
+function openSuitePopover() {
+  document.querySelector(".ag-rail-brand")?.click();
+  scheduleSuitePosition();
+  window.setTimeout(() => {
+    ensureSuiteBetter();
+    scheduleSuitePosition();
+  }, 0);
+  window.setTimeout(ensureSuiteBetter, 80);
+}
+
+function ensureSuiteBetter() {
+  const show = state.settings.ui.showButton !== false;
+  const footer = document.querySelector(".ag-suite-footer");
+  if (!footer) return;
+  let button = footer.querySelector("[data-ba-suite-better]");
+  if (!show) {
+    button?.remove();
+    footer.classList.remove("ba-suite-footer-dynamic");
+    return;
+  }
+  if (!button) {
+    button = document.createElement("button");
+    button.type = "button";
+    button.className = "ag-suite-util-btn ba-suite-better";
+    button.setAttribute("data-ba-suite-better", "1");
+    button.title = "Better Agnostr settings";
+    button.setAttribute("aria-label", "Better Agnostr settings");
+    button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"></path><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8L19 17Z"></path></svg><span>Better Agnostr</span>';
+    const settings = [...footer.querySelectorAll(".ag-suite-util-btn")].find((el) => /^settings/i.test((el.textContent || "").trim()));
+    if (settings) settings.before(button);
+    else footer.append(button);
+  }
+  footer.classList.add("ba-suite-footer-dynamic");
+}
+
+function groupRailPage() {
+  if (window.innerWidth < 900) return null;
+  const visible = (el) => el instanceof HTMLElement && el.getClientRects().length > 0;
+  return [...document.querySelectorAll(".ag-srv-discord-pane")].find(visible) || null;
+}
+
+function nativeGroupButtons() {
+  return [...document.querySelectorAll(".ag-rail-servers button.ag-rail-srv")];
+}
+
+function groupIconMarkup(button) {
+  const image = button.querySelector("img");
+  const src = image?.getAttribute("src") || "";
+  if (src) return `<img class="ba-group-rail-img" src="${h(src)}" alt="">`;
+  const emoji = button.querySelector(".ag-rail-srv-emoji")?.textContent?.trim() || "";
+  if (emoji && emoji !== "📡") return `<span class="ba-group-rail-glyph">${h(emoji)}</span>`;
+  const mono = button.querySelector(".ag-rail-srv-mono")?.textContent?.trim() || "";
+  const label = button.getAttribute("aria-label") || "Group";
+  const words = label.replace(/[^a-z0-9 ]/gi, " ").trim().split(/\s+/).filter(Boolean);
+  const source = words.length > 1 ? words[words.length - 1] : words[0] || label;
+  const initials = (mono || source).slice(0, 2);
+  return `<span class="ba-group-rail-glyph mono">${h(initials.toUpperCase())}</span>`;
+}
+
+function groupRailSignature(groups) {
+  return groups
+    .map((button) => {
+      const badge = button.querySelector(".ag-rail-badge")?.textContent?.trim() || "";
+      return [
+        button.getAttribute("aria-label") || "",
+        button.classList.contains("active") || button.getAttribute("aria-current") === "page" ? "1" : "0",
+        badge,
+        button.querySelector("img")?.getAttribute("src") || "",
+        button.querySelector(".ag-rail-srv-emoji")?.textContent?.trim() || "",
+        button.querySelector(".ag-rail-srv-mono")?.textContent?.trim() || "",
+      ].join("|");
+    })
+    .join("~");
+}
+
+function handleGroupRailClick(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  if (target.closest("[data-ba-group-suite]")) {
+    event.preventDefault();
+    event.stopPropagation();
+    openSuitePopover();
+    return;
+  }
+  if (target.closest("[data-ba-group-add]")) {
+    event.preventDefault();
+    event.stopPropagation();
+    document.querySelector(".ag-rail-servers .ag-rail-add")?.click();
+    return;
+  }
+  const group = target.closest("[data-ba-group-index]");
+  if (!group) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const native = nativeGroupButtons()[Number(group.getAttribute("data-ba-group-index"))];
+  native?.click();
+}
+
+function handleGroupRailContext(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const group = target.closest("[data-ba-group-index]");
+  if (!group) return;
+  const native = nativeGroupButtons()[Number(group.getAttribute("data-ba-group-index"))];
+  if (!native) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const rect = group.getBoundingClientRect();
+  native.dispatchEvent(new MouseEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    clientX: Math.round(rect.right),
+    clientY: Math.round(rect.top + rect.height / 2),
+    screenX: Math.round(rect.right),
+    screenY: Math.round(rect.top + rect.height / 2),
+    button: 2,
+    buttons: 2,
+    view: window,
+  }));
+}
+
+function ensureGroupRail() {
+  const page = groupRailPage();
+  document.documentElement.classList.toggle("ba-group-rail-open", !!page);
+  let rail = document.querySelector(".ba-group-rail");
+  if (!page) {
+    rail?.remove();
+    return;
+  }
+  if (!rail) {
+    rail = document.createElement("div");
+    rail.className = "ba-group-rail";
+    rail.setAttribute("role", "toolbar");
+    rail.setAttribute("aria-label", "Groups");
+    rail.addEventListener("click", handleGroupRailClick);
+    rail.addEventListener("contextmenu", handleGroupRailContext);
+    document.body.appendChild(rail);
+  }
+  const groups = nativeGroupButtons();
+  const hasAdd = !!document.querySelector(".ag-rail-servers .ag-rail-add");
+  const signature = `${groupRailSignature(groups)}|add:${hasAdd ? 1 : 0}`;
+  if (rail.dataset.signature === signature) return;
+  rail.dataset.signature = signature;
+  const groupHtml = groups
+    .map((button, index) => {
+      const label = button.getAttribute("aria-label") || `Group ${index + 1}`;
+      const active = button.classList.contains("active") || button.getAttribute("aria-current") === "page";
+      const badge = button.querySelector(".ag-rail-badge")?.textContent?.trim() || "";
+      return `<button type="button" class="ba-group-rail-btn${active ? " is-active" : ""}" data-ba-group-index="${index}" title="${h(label)}" aria-label="${h(label)}"${active ? ' aria-current="page"' : ""}>${groupIconMarkup(button)}${badge ? `<span class="ba-group-rail-badge">${h(badge)}</span>` : ""}</button>`;
+    })
+    .join("");
+  rail.innerHTML = `
+    <button type="button" class="ba-group-rail-btn ba-group-suite" data-ba-group-suite="1" data-ba-suite-trigger="1" title="Agnostr Suite" aria-label="Agnostr Suite">
+      <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg>
+    </button>
+    ${groups.length ? '<div class="ba-group-rail-divider" aria-hidden="true"></div>' : ""}
+    ${groupHtml}
+    ${hasAdd ? '<button type="button" class="ba-group-rail-btn ba-group-rail-add" data-ba-group-add="1" title="Create or join group" aria-label="Create or join group"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>' : ""}
+  `;
+  scheduleSuitePosition();
+}
+
 function ensureHeaderButtons() {
   const visible = (el) => el instanceof HTMLElement && el.getClientRects().length > 0;
   const workspace = document.querySelector(".ag-app")?.dataset.workspace || "";
   const groupView = isGroupChatView();
+  const groupRailActive = document.documentElement.classList.contains("ba-group-rail-open");
   if (!groupView) {
     for (const old of document.querySelectorAll("[data-ba-public-chat]")) old.remove();
   }
@@ -3109,9 +3297,9 @@ function ensureHeaderButtons() {
   }
   if (target) {
     for (const trigger of document.querySelectorAll("[data-ba-suite-trigger]")) {
-      if (!target.contains(trigger)) trigger.remove();
+      if (!target.contains(trigger) && !trigger.closest(".ba-group-rail")) trigger.remove();
     }
-    if (!target.querySelector("[data-ba-suite-trigger]")) {
+    if (!groupRailActive && !target.querySelector("[data-ba-suite-trigger]")) {
       const suite = document.createElement("button");
       suite.type = "button";
       suite.className = "ag-circle-btn ba-suite-trigger";
@@ -3122,8 +3310,7 @@ function ensureHeaderButtons() {
       suite.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        document.querySelector(".ag-rail-brand")?.click();
-        scheduleSuitePosition();
+        openSuitePopover();
       });
       if (target.matches(".ag-wallet-stage-header, .ag-amail-top-actions")) target.append(suite);
       else target.prepend(suite);
@@ -3147,72 +3334,12 @@ function ensureHeaderButtons() {
     }
   }
 
-  ensureFooterControls();
-}
-
-function ensureFooterControls() {
-  const profile = document.querySelector(".ag-profile-bar-btn");
-  if (!profile) return;
-  const profileFooter = profile.closest(".ag-conv-footer");
-  if (!profileFooter) return;
-  const hiddenActions = profileFooter.querySelector(".ag-conv-footer-actions");
-  if (hiddenActions) hiddenActions.style.display = "none";
-  let controls = profileFooter.querySelector(":scope > .ba-footer-controls");
-  if (!controls) {
-    controls = document.createElement("div");
-    controls.className = "ba-footer-controls";
-    profile.after(controls);
-  }
-  let settings = controls.querySelector("[data-ba-settings-opener]");
-  if (!settings) {
-    settings = document.createElement("button");
-    settings.type = "button";
-    settings.className = "ag-circle-btn ag-dock-icon-btn ba-native-settings-btn";
-    settings.setAttribute("data-ba-settings-opener", "1");
-    settings.title = "Settings";
-    settings.setAttribute("aria-label", "Settings");
-    settings.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg>';
-    settings.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openAgnostrSettings("Profile");
-    });
-    controls.append(settings);
-  }
-  let shortcut = controls.querySelector("[data-ba-settings-shortcut]");
-  const show = state.settings.ui.showButton !== false;
-  if (!show) {
-    shortcut?.remove();
-    return;
-  }
-  if (!shortcut) {
-    shortcut = document.createElement("button");
-    shortcut.type = "button";
-    shortcut.className = "ag-circle-btn ag-dock-icon-btn ba-settings-shortcut";
-    shortcut.setAttribute("data-ba-settings-shortcut", "1");
-    shortcut.title = "Better Agnostr settings";
-    shortcut.setAttribute("aria-label", "Better Agnostr settings");
-    shortcut.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8L19 17Z"/></svg>';
-    shortcut.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openBetterSettings(state.betterTab || "line");
-    });
-    controls.append(shortcut);
-  }
-  for (const old of document.querySelectorAll("[data-ba-settings-shortcut]")) {
-    if (!controls.contains(old)) old.remove();
-  }
 }
 
 function ensureSuiteButton() {
   const footer = document.querySelector(".ag-suite-footer");
-  for (const old of document.querySelectorAll("[data-ba-suite-better]")) old.remove();
   for (const btn of document.querySelectorAll(".ag-suite-util-btn")) {
-    if (btn.hasAttribute("data-ba-suite-better")) {
-      btn.remove();
-      continue;
-    }
+    if (btn.hasAttribute("data-ba-suite-better")) continue;
     const text = (btn.textContent || "").trim();
     if (/^(radar map|search|better)/i.test(text)) {
       btn.style.display = "none";
@@ -3224,6 +3351,7 @@ function ensureSuiteButton() {
   }
   if (!footer) return;
   footer.style.removeProperty("display");
+  ensureSuiteBetter();
   const prev = footer.previousElementSibling;
   if (prev?.classList.contains("ag-suite-divider")) prev.style.removeProperty("display");
   if (document.querySelector(".ag-suite-popover")) scheduleSuitePosition();
@@ -4360,7 +4488,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.0.3";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.0";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4377,7 +4505,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.0.3"}`, 
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.0"}`, 
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
@@ -4441,6 +4569,7 @@ async function init() {
     }
   }, { capture: true, passive: true });
   document.addEventListener("click", handleGlobalClickSound, true);
+  window.addEventListener("resize", () => scheduleEnhance(), { passive: true });
   window.setInterval(tickObfuscation, 70);
   window.setInterval(flairTickerTick, 1500);
   ensureHost();

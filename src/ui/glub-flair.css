@@ -24,6 +24,13 @@
 	}
 }
 
+/* While a flair is present, never fall back to the generic rainbow palette.
+   Each flair's own .fmtRainbow rule below replaces this neutral fill. */
+.flair .fmtRainbow,
+[data-ba-flair] .fmtRainbow {
+	background-image: linear-gradient(var(--fg, #ffffff), var(--fg, #ffffff));
+}
+
 .fmtEmoji {
 	
 	color: var(--fg);

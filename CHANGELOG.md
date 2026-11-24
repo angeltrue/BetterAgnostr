@@ -2,6 +2,16 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.0 — Suite shortcut, group switcher, and serif fonts
+
+- Removed the dedicated Settings and Better Agnostr buttons from the profile footer.
+- Moved the Better Agnostr shortcut into the Agnostr Suite footer on every page.
+- Rebalanced the suite footer so **Better Agnostr** and **Settings** share the row evenly.
+- Added a simplified group switcher on the groups page with joined groups, a create/join button, and the Agnostr Suite button inline with the group buttons.
+- Removed the generic rainbow fallback while a flair-specific rainbow is active, preventing the default rainbow flash when toggling rainbow formatting.
+- Moved the stars shooting star further left and extended its travel so it is more noticeable.
+- Added six bundled serif fonts: Playfair Display, Cormorant Garamond, Libre Baskerville, Lora, Fraunces, and Instrument Serif.
+
 ## 1.0.3 — Native reactions
 
 - Removed the Better Agnostr reaction picker enhancements. Agnostr now provides reactions directly in the client.
