@@ -56,7 +56,7 @@ Everything runs locally. The extension has no server, sends no keys anywhere, an
 3. Choose **Load Temporary Add-on…** and select `dist/manifest.json`.
 4. Open or reload <https://agnostr.com/>.
 
-The unsigned XPI is in `release/`. Firefox 128 or newer is required. For Chromium 148+, load `release/better-agnostr-1.1.11-chromium.zip` as an unpacked extension. The Chromium manifest uses a stable key, so replacing the unpacked folder keeps the same extension ID and settings.
+The unsigned XPI is in `release/`. Firefox 128 or newer is required. For Chromium 148+, load `release/better-agnostr-1.1.12-chromium.zip` as an unpacked extension. The Chromium manifest uses a stable key, so replacing the unpacked folder keeps the same extension ID and settings.
 
 ## Usage
 
@@ -108,7 +108,7 @@ The **Aa** button opens bold, italic, underline, strike, obfuscate, rainbow, res
 
 ### Notifications and sounds
 
-Agnostr keeps its native notifications, ringtone, vibration, and lock-screen preview controls. Better Agnostr replaces only the native message chime and adds its own chime selection, UI clicks, volume, chime triggers, and test buttons under **Settings → Notifications**.
+Agnostr keeps its native notifications, ringtone, vibration, and lock-screen preview controls. Better Agnostr replaces the native message chime and general sound-effects engine, and adds its own chime selection, UI clicks, volume, chime triggers, and test buttons under **Settings → Notifications**.
 
 ### Suite and groups
 
@@ -131,7 +131,7 @@ The toolbar popup's **Enable Better Agnostr** switch reloads every open Agnostr 
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.11.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.12.zip
 ```
 
 Source layout:
