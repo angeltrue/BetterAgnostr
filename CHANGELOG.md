@@ -2,6 +2,15 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.12 — Native sound effects off
+
+- Disabled Agnostr's separate **Sound Effects** engine, which was still playing default incoming-message, mention, DM, send, and UI sounds.
+- Hid the native **Audio → Sound Effects** section while Better Agnostr is active.
+- Preserved the native sound-effects preference and restored it when Better Agnostr is paused.
+- Kept native notifications, ringtone, vibration, and lock-screen previews intact.
+- Better Agnostr chimes and UI clicks remain the active sound system.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.1.11 — Brighter rainbow and scattered shooting stars
 
 - Brightened `&g` rainbow text with a screen-blended fill and a soft white glow.

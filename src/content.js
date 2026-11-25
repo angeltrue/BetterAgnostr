@@ -37,6 +37,8 @@ import {
 const api = globalThis.browser ?? globalThis.chrome;
 const NATIVE_NOTIFICATIONS_KEY = "agnostr:v2:notifications";
 const NATIVE_NOTIFICATIONS_BACKUP = "betterAgnostr.nativeNotifications.v1";
+const NATIVE_SETTINGS_KEY = "agnostr:v2:settings";
+const NATIVE_SETTINGS_BACKUP = "betterAgnostr.nativeSettings.v1";
 const SETTINGS_BACKUP_KEY = "betterAgnostr.settings.backup.v1";
 
 function readSettingsBackup() {
@@ -59,14 +61,11 @@ function writeSettingsBackup(settings) {
   } catch {}
 }
 
-function overrideNativeNotifications() {
+function disableNativeSound(key, backupKey) {
   try {
-    const raw = localStorage.getItem(NATIVE_NOTIFICATIONS_KEY);
-    if (localStorage.getItem(NATIVE_NOTIFICATIONS_BACKUP) === null) {
-      localStorage.setItem(
-        NATIVE_NOTIFICATIONS_BACKUP,
-        JSON.stringify({ present: raw !== null, value: raw || "" }),
-      );
+    const raw = localStorage.getItem(key);
+    if (localStorage.getItem(backupKey) === null) {
+      localStorage.setItem(backupKey, JSON.stringify({ present: raw !== null, value: raw || "" }));
     }
     let current = {};
     try {
@@ -75,7 +74,7 @@ function overrideNativeNotifications() {
       current = {};
     }
     localStorage.setItem(
-      NATIVE_NOTIFICATIONS_KEY,
+      key,
       JSON.stringify({
         ...(current && typeof current === "object" ? current : {}),
         soundEnabled: false,
@@ -84,15 +83,25 @@ function overrideNativeNotifications() {
   } catch {}
 }
 
-function restoreNativeNotifications() {
+function restoreNativeSound(key, backupKey) {
   try {
-    const backup = localStorage.getItem(NATIVE_NOTIFICATIONS_BACKUP);
+    const backup = localStorage.getItem(backupKey);
     if (backup === null) return;
     const saved = JSON.parse(backup);
-    if (saved?.present) localStorage.setItem(NATIVE_NOTIFICATIONS_KEY, String(saved.value || ""));
-    else localStorage.removeItem(NATIVE_NOTIFICATIONS_KEY);
-    localStorage.removeItem(NATIVE_NOTIFICATIONS_BACKUP);
+    if (saved?.present) localStorage.setItem(key, String(saved.value || ""));
+    else localStorage.removeItem(key);
+    localStorage.removeItem(backupKey);
   } catch {}
+}
+
+function overrideNativeSounds() {
+  disableNativeSound(NATIVE_NOTIFICATIONS_KEY, NATIVE_NOTIFICATIONS_BACKUP);
+  disableNativeSound(NATIVE_SETTINGS_KEY, NATIVE_SETTINGS_BACKUP);
+}
+
+function restoreNativeSounds() {
+  restoreNativeSound(NATIVE_NOTIFICATIONS_KEY, NATIVE_NOTIFICATIONS_BACKUP);
+  restoreNativeSound(NATIVE_SETTINGS_KEY, NATIVE_SETTINGS_BACKUP);
 }
 
 const FONT_PRESETS = [
@@ -1419,7 +1428,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.11";
+  const version = manifest.version || "1.1.12";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1652,7 +1661,7 @@ function soundsSectionHtml() {
       <div class="ag-set-section-head">
         <div class="ag-set-section-copy">
           <div class="ag-set-section-title-row"><h3 class="ag-set-section-title">Better Agnostr sounds</h3></div>
-          <p class="ag-set-section-desc">These chimes and UI clicks replace Agnostr's native message chime. Agnostr notifications, ringtone, vibration, and lock-screen previews above remain in control.</p>
+          <p class="ag-set-section-desc">These chimes and UI clicks replace Agnostr's native message chime and sound effects. Agnostr notifications, ringtone, vibration, and lock-screen previews above remain in control.</p>
         </div>
       </div>
       <div class="ag-set-card-list">
@@ -1718,6 +1727,13 @@ function clearNativeSoundsOverride(modal) {
 function injectAppearanceExtras(modal) {
   const stack = modal.querySelector(".ag-set-pane-stack");
   if (!stack) return;
+  const audioSection = [...stack.querySelectorAll("section.ag-set-section")].find(
+    (el) => el.querySelector(".ag-set-section-title")?.textContent?.trim() === "Audio",
+  );
+  if (audioSection) {
+    audioSection.style.display = "none";
+    audioSection.setAttribute("data-ba-hidden-native-audio", "1");
+  }
   const agnThemeGrid = [...modal.querySelectorAll(".ag-set-theme-grid")].find((g) => !g.classList.contains("ba-glub-theme-grid"));
   if (agnThemeGrid) {
     let themeGroup = stack.querySelector("[data-ba-settings-group='themes']");
@@ -4690,7 +4706,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.11";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.12";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4707,7 +4723,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.11"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.12"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
@@ -4858,20 +4874,20 @@ async function init() {
     const before = change.oldValue?.enabled !== false;
     const after = change.newValue?.enabled !== false;
     if (before === after) return;
-    if (after) overrideNativeNotifications();
-    else restoreNativeNotifications();
+    if (after) overrideNativeSounds();
+    else restoreNativeSounds();
     location.reload();
   });
 
   window.addEventListener("message", handlePageMessage);
   document.addEventListener("ba-page", handlePageCustomEvent);
   if (state.settings.enabled === false) {
-    restoreNativeNotifications();
+    restoreNativeSounds();
     hello();
     return;
   }
   document.documentElement.classList.add("ba-active");
-  overrideNativeNotifications();
+  overrideNativeSounds();
   document.addEventListener("pointerdown", () => {
     if (!state.soundUnlocked) {
       state.soundUnlocked = true;
