@@ -39,8 +39,10 @@ A Chromium extension for **agnostr.com**. It adds a message event inspector, Glu
 - **Client-tag controls** with per-event policies.
 - **Privacy tools** for tag scrubbing, review before signing, teleport omission, Locate Me, and voice memos.
 - **Call blocking** and call-UI hiding.
+- **No blocked-message run notices** in chats.
 - **12 Glub themes**, a custom CSS box, and **10 bundled font families**.
 - **12 message chimes and 12 UI click sounds**, generated with Web Audio.
+- **Better Agnostr chimes** with alert-type filters and UI clicks. Agnostr's native notifications stay in place; its message chime is replaced.
 - **Hug / Slap / Custom action** right-click commands.
 - **Categorized emoji picker** with 2,300+ base emoji.
 - A small **BA** plaque beside Better Agnostr usernames. Client avatar borders remain Agnostr's own.
@@ -95,8 +97,8 @@ Open **Agnostr Settings → Better Agnostr → line**, or use the **Better Agnos
 - The live glub.chat build stamp is fetched from `https://glub.chat/` and written as the `v` field of the `glub` tag. glub drops metadata from an unknown build.
 - Incoming Glub flair and rich text are rendered directly in Agnostr rows.
 - A colour before `{name}` colours the author; a colour before `{msg}` colours the message body.
-- The preview applies the template, selected flair, `&g` rainbow palette, and `&k` obfuscation. Rainbow motion runs right-to-left.
-- `&k` obfuscation is deliberately sparse: a short flicker of one or two glyphs, then several seconds of rest.
+- The preview applies the template, selected flair, `&g` rainbow cycling, and `&k` obfuscation. Colours and rainbow leave emoji glyphs untouched.
+- `&k` obfuscation works on usernames and message text. It is deliberately sparse: a short flicker of one or two glyphs, then several seconds of rest.
 
 Outgoing chat events are changed **before signing** by hooking the page's signer, so the resulting event id and signature stay valid.
 
@@ -129,7 +131,7 @@ Right-click any message for:
 
 - **Hug** — sends `* hugs @name#tag *`
 - **Slap** — sends `* slaps @name#tag with a large trout *`
-- **Custom action…** — opens a native-styled dialog with a live preview. The result uses the `* action *` format, e.g. `* boops @name#tag *`. Edit the default text in **Settings → Better Agnostr → general**; `{user}` places the mention yourself.
+- **Custom action…** — opens a native-styled dialog with a live preview. The result uses the `* action *` format. Use `{user}` for the target and `{sender}` for your name; nothing is appended automatically. Typing `/me <text>` in the composer sends the same action format directly.
 
 The menu repositions and scrolls when the added actions would run past the viewport.
 
@@ -149,7 +151,7 @@ The suite footer carries **Settings** and **Better Agnostr** side by side, so th
 
 Sounds are generated procedurally with the Web Audio API. Message chimes include Macintosh, Sun Sparc, SGI IRIX, MSN Messenger, AOL, ICQ, Palm, BlackBerry, Blade Runner, Tron, Commodore 64, and Amiga. UI clicks include Model M, Mac mouse, Sun keyboard, SGI blip, MSN nudge, AOL chime, Palm tap, BlackBerry key, Blade Runner UI, Tron disc, C64 key, and Amiga click.
 
-Volume, chat/mention/DM/call toggles, and test buttons are in **Settings → Notifications**. The native **Message chimes** switch remains the on/off control for message chimes.
+**Settings → Notifications** keeps Agnostr's native notification, ringtone, vibration, and preview controls. Better Agnostr adds its own message chimes, UI clicks, volume, chime triggers, and test buttons, and replaces the native message chime.
 
 ### Themes and fonts
 
@@ -167,13 +169,12 @@ All Better Agnostr settings live in Agnostr Settings.
 
 - **Better Agnostr → line:** template, colours, codes, flair, live preview, rendering toggles.
 - **Better Agnostr → client:** client tag and per-event policies.
-- **Better Agnostr → general:** suite-shortcut visibility, composer-panel state, and the custom action default.
 - **Privacy & Trust → Better Agnostr:** Locate Me, teleport omission, voice-memo removal, tracking-parameter scrubbing, review before signing, call blocking, and tag removal.
-- **Notifications → Better Agnostr sounds:** presets, volume, event toggles, and tests.
+- **Notifications:** Agnostr's native notification controls plus Better Agnostr chimes, chime triggers, UI clicks, volume, and tests.
 - **Appearance:** Glub themes, custom CSS, and fonts.
 - **About:** current web build, Better Agnostr version, and credits. Angel's credit opens the native peer profile for `npub1t9kl0mq3f8pesupc9nqndpq389af4czsk7nnpvr5g6kg9hyenxvssjs0yk`.
 
-The toolbar popup has an **Enable Better Agnostr** switch. Turning it off reloads every open Agnostr tab and fully pauses the extension: no UI, signer patching, call filtering, outgoing-event changes, status timers, or glub-build requests.
+The toolbar popup has an **Enable Better Agnostr** switch. Turning it off reloads every open Agnostr tab and fully pauses the extension: no UI, signer patching, call filtering, outgoing-event changes, status timers, or glub-build requests. Agnostr's own message chime and notification settings are restored while paused.
 
 ## How it works
 
@@ -195,7 +196,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.8-chromium.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.9-chromium.zip
 ```
 
 Source layout:

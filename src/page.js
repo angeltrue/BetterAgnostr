@@ -67,6 +67,26 @@ import {
     postSeq: 0,
   };
 
+  // Better Agnostr owns message chimes while it is active. Leave native
+  // notifications, ringtone, and vibration intact.
+  const NATIVE_NOTIFICATIONS_KEY = "agnostr:v2:notifications";
+  const nativeStorageSetItem = globalThis.Storage.prototype.setItem;
+
+  function forceNativeChimeOff(raw) {
+    try {
+      const value = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (!value || typeof value !== "object") return raw;
+      return JSON.stringify({ ...value, soundEnabled: false });
+    } catch {
+      return raw;
+    }
+  }
+
+  globalThis.Storage.prototype.setItem = function setItem(key, value) {
+    if (state.active && key === NATIVE_NOTIFICATIONS_KEY) value = forceNativeChimeOff(value);
+    return nativeStorageSetItem.call(this, key, value);
+  };
+
   const NativeWebSocket = window.WebSocket;
   const nativeAdd = NativeWebSocket.prototype.addEventListener;
   const nativeRemove = NativeWebSocket.prototype.removeEventListener;
@@ -172,7 +192,7 @@ import {
       state.token = data.token || state.token;
       setConfig(parseSettingsPayload(data.payload?.settings));
       publishStatus();
-      post("ready", { version: "1.1.8" });
+      post("ready", { version: "1.1.9" });
       if (state.active) start();
       return;
     }
