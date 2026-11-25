@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS = {
     renderInAgnostr: true,
     renderRichInAgnostr: true,
     reduceMotion: false,
+    rainbowStyle: "glub",
   },
   client: {
     name: "BetterAgnostr",
@@ -141,6 +142,7 @@ export function normalizeSettings(raw) {
   s.studio.renderInAgnostr = s.studio.renderInAgnostr !== false;
   s.studio.renderRichInAgnostr = s.studio.renderRichInAgnostr !== false;
   s.studio.reduceMotion = s.studio.reduceMotion === true;
+  s.studio.rainbowStyle = s.studio.rainbowStyle === "bright" ? "bright" : "glub";
   s.studio.template = String(s.studio.template || "").replace(/[\r\n\t]+/g, " ").slice(0, FMT_MAX);
   if (typeof s.studio.flair !== "string" || (s.studio.flair && !FLAIR_NAMES.has(s.studio.flair))) {
     s.studio.flair = "";

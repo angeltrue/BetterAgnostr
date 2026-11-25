@@ -76,11 +76,9 @@ const FLAIR_LIMITS = {
 	// pseudo-element on the bubble, which is a node rather than a frame's work.
 	// Starts uncapped, per the rule above.
 	bubbles: 0,
-	// The cheapest thing in this file. No particles at all - two gradient sheets,
-	// three composited animations between them, and not a single extra node: it does
-	// not even ask for an fx layer. A row of aurora is two layers the compositor
-	// owns outright.
-	aurora: 0,
+	// Six soft curtains plus a blurred layer and a star field. The filter is one
+	// rasterized layer per row, so keep the number of simultaneous aurora rows low.
+	aurora: 6,
 	// The circuit board. Measured at ~50 positioned spans plus one small svg. None of
 	// them is blurred,
 	// blended or filtered, so what earns the cap is node count rather than paint -
@@ -152,7 +150,7 @@ const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 // (fire and rain instead use it as a persistent container of individual particles:
 // one element per spark/drop is the only way each gets its own spawn time and path,
 // which a box-shadow field - one element, one animation - cannot give.)
-const FX_FLAIRS = new Set(["stars", "lightning", "fire", "rain", "plume", "neon", "matrix", "sonar", "fireflies", "bubbles", "bitcoin", "glitch", "sol"]);
+const FX_FLAIRS = new Set(["stars", "lightning", "fire", "rain", "plume", "neon", "matrix", "sonar", "fireflies", "bubbles", "aurora", "bitcoin", "glitch", "sol"]);
 
 export function flairHasFx(raw) {
 	return FX_FLAIRS.has(flairName(raw));
@@ -161,8 +159,17 @@ export function flairHasFx(raw) {
 // what a flair's fx layer starts life containing. Empty for the one-shot effects
 // (stars/lightning fill it at fire time); fire pre-populates it with its embers,
 // emitted from messageHtml so they survive every in-place rerender.
+function auroraCurtainMarkup() {
+	let html = "";
+	for (let i = 0; i < 6; i++) {
+		html += `<span class="auroraCurtain" style="--c-i:${i}" aria-hidden="true"></span>`;
+	}
+	return html;
+}
+
 export function flairFxInner(raw) {
 	const n = flairName(raw);
+	if (n === "aurora") return auroraCurtainMarkup();
 	if (n === "fire") return fireEmberMarkup();
 	if (n === "rain") return rainDropMarkup();
 	if (n === "plume") return plumePuffMarkup();
@@ -173,8 +180,6 @@ export function flairFxInner(raw) {
 	if (n === "matrix") return matrixColumnMarkup();
 	if (n === "sonar") return sonarPingMarkup();
 	if (n === "fireflies") return fireflyMarkup();
-	// aurora is deliberately absent here and from FX_FLAIRS: it is made entirely of
-	// the two pseudo-elements every flair already has, so it emits no markup at all.
 	if (n === "bubbles") return bubbleMarkup();
 	// the board is persistent: it is this row's circuitry, not a thing that happens to
 	// it, so it is drawn once and the surge only lights what is already there
@@ -1493,32 +1498,17 @@ export function flairVars(raw) {
 	// two sheets drifting at the same rate are one sheet, and the interference
 	// between them is the entire effect. The ratio is held well away from 1.
 	if (n === "aurora") {
-		const near = rnd(15, 26);
-		const far = Math.max(9, Math.min(34, near * rnd(0.45, 0.72)));
 		return {
-			"--aur-near-dur": `${near.toFixed(2)}s`,
-			"--aur-near-delay": `-${rnd(0, 24).toFixed(2)}s`,
-			"--aur-far-dur": `${far.toFixed(2)}s`,
-			"--aur-far-delay": `-${rnd(0, 30).toFixed(2)}s`,
-			// The tile width - one full pass of the ribbon - and therefore also exactly
-			// how far the sheet drifts per cycle. The two are the same number on
-			// purpose: travelling one whole tile lands the pattern back where it
-			// started, which is what makes the loop seamless. Anything else snaps.
-			//
-			// It doubles as the visual scale: a wide tile is broad lazy curtains, a
-			// narrow one is a busier sky. The far sheet is narrower because it is
-			// further away.
-			"--aur-near-band": `${Math.round(rnd(200, 330))}px`,
-			"--aur-far-band": `${Math.round(rnd(130, 210))}px`,
-			// the undulation: a slow skew, on its own clock again so the lean and the
-			// drift never lock into one motion
-			"--aur-lean": `${rnd(4, 11).toFixed(1)}deg`,
-			"--aur-lean-dur": `${rnd(11, 21).toFixed(2)}s`,
-			"--aur-lean-delay": `-${rnd(0, 19).toFixed(2)}s`,
-			"--aur-near-peak": rnd(0.62, 0.95).toFixed(2),
-			"--aur-far-peak": rnd(0.38, 0.68).toFixed(2),
-			"--aur-breathe-dur": `${rnd(9, 17).toFixed(2)}s`,
-			"--aur-breathe-delay": `-${rnd(0, 15).toFixed(2)}s`,
+			// The sky is one box-shadow field; the curtains are separate gel sheets.
+			"--aur-stars": particleField(20, 58, 26, STAR_TINTS),
+			"--aur-curtain-dur": `${rnd(12, 24).toFixed(2)}s`,
+			"--aur-curtain-delay": `-${rnd(0, 22).toFixed(2)}s`,
+			"--aur-sway-dur": `${rnd(9, 17).toFixed(2)}s`,
+			"--aur-sway-delay": `-${rnd(0, 16).toFixed(2)}s`,
+			"--aur-glow-dur": `${rnd(8, 16).toFixed(2)}s`,
+			"--aur-glow-delay": `-${rnd(0, 14).toFixed(2)}s`,
+			"--aur-star-dur": `${rnd(4, 8).toFixed(2)}s`,
+			"--aur-star-delay": `-${rnd(0, 7).toFixed(2)}s`,
 			"--aur-text-dur": `${rnd(8, 15).toFixed(2)}s`,
 			"--aur-text-delay": `-${rnd(0, 13).toFixed(2)}s`,
 		};

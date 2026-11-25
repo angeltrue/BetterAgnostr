@@ -1415,3 +1415,9 @@ html.ba-hide-timestamps .ag-msg-row .ag-msg-time,
 html.ba-hide-timestamps .ag-msg-row .ag-msg-gutter-time {
   display: none !important;
 }
+
+.ba-set-chip.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
