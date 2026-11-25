@@ -1362,7 +1362,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.7";
+  const version = manifest.version || "1.1.8";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -3153,7 +3153,7 @@ function replaceBitchatText() {
   const blocked = ".ag-msg-rich, .ag-msg-content, .ag-chat-row-preview, .ag-msg-preview, .ag-conv-preview, .ag-composer, textarea, input, pre, code, script, style";
   const attrSelector = '[title*="Bitchat"], [aria-label*="Bitchat"], [placeholder*="Bitchat"]';
   const roots = document.querySelectorAll(
-    ".ag-suite-popover, .ag-header, .ag-conv-header, .ag-conv-pane, .ag-srv-discord-pane, .ag-settings-modal, .ag-peer-modal, .ag-sheet, .ag-quick-profile-popover, .ag-ctx-menu",
+    ".ag-suite-popover, .ag-header, .ag-conv-header, .ag-conv-pane, .ag-srv-discord-pane, .ag-mobile-tabbar, .ag-settings-modal, .ag-peer-modal, .ag-sheet, .ag-quick-profile-popover, .ag-ctx-menu",
   );
   for (const root of roots) {
     if (!(root instanceof HTMLElement)) continue;
@@ -3206,7 +3206,6 @@ function enhanceAll() {
     }
     removeCallMenuItems();
     maintainCallControls();
-    ensureHeaderButtons();
     ensureSuiteButton();
     ensureToolbars();
     ensureComposerEmoji();
@@ -3215,46 +3214,14 @@ function enhanceAll() {
     markBetterClients();
     hideSelfTeleportBadges();
     replaceBitchatText();
-    if (document.querySelector(".ag-suite-popover")) positionSuitePopover();
   } finally {
     state.pageObserverStart?.();
   }
 }
 
 function applyShortcutVisibility() {
-  const show = state.settings.ui.showButton !== false;
-  document.documentElement.classList.toggle("ba-hide-rail-shortcut", !show);
   for (const node of document.querySelectorAll("[data-ba-rail], .ba-rail-slot")) node.remove();
-  ensureHeaderButtons();
-}
-
-function positionSuitePopover() {
-  const pop = document.querySelector(".ag-suite-popover");
-  const trigger = [...document.querySelectorAll("[data-ba-suite-trigger]")].find((el) => el.getClientRects().length);
-  if (!pop || !trigger) return;
-  const rect = trigger.getBoundingClientRect();
-  const box = pop.getBoundingClientRect();
-  const margin = 10;
-  let left = rect.right - box.width;
-  if (left < margin) left = rect.left;
-  left = Math.max(margin, Math.min(left, window.innerWidth - box.width - margin));
-  let top = rect.bottom + 8;
-  if (top + box.height > window.innerHeight - margin) {
-    top = Math.max(margin, window.innerHeight - box.height - margin);
-  }
-  pop.style.position = "fixed";
-  pop.style.left = `${Math.round(left)}px`;
-  pop.style.top = `${Math.round(top)}px`;
-  pop.style.right = "auto";
-  pop.style.bottom = "auto";
-  pop.style.transform = "none";
-}
-
-function scheduleSuitePosition() {
-  positionSuitePopover();
-  window.requestAnimationFrame(positionSuitePopover);
-  window.setTimeout(positionSuitePopover, 80);
-  window.setTimeout(positionSuitePopover, 220);
+  ensureSuiteButton();
 }
 
 function isGroupChatView() {
@@ -3267,16 +3234,6 @@ function returnToPublicChat() {
   if (!(railChat instanceof HTMLElement)) return false;
   railChat.click();
   return true;
-}
-
-function openSuitePopover() {
-  document.querySelector(".ag-rail-brand")?.click();
-  scheduleSuitePosition();
-  window.setTimeout(() => {
-    ensureSuiteBetter();
-    scheduleSuitePosition();
-  }, 0);
-  window.setTimeout(ensureSuiteBetter, 80);
 }
 
 function ensureSuiteBetter() {
@@ -3302,49 +3259,6 @@ function ensureSuiteBetter() {
   footer.classList.add("ba-suite-footer-dynamic");
 }
 
-function ensureHeaderButtons() {
-  const visible = (el) => el instanceof HTMLElement && el.getClientRects().length > 0;
-  const workspace = document.querySelector(".ag-app")?.dataset.workspace || "";
-  const groupView = isGroupChatView();
-  if (!groupView) {
-    for (const old of document.querySelectorAll("[data-ba-public-chat]")) old.remove();
-  }
-  let target = null;
-  if (groupView) {
-    target = [...document.querySelectorAll(".ag-header-actions")].find(visible) || null;
-  } else if (workspace === "agora") target = document.querySelector(".ag-agora-header-actions");
-  else if (workspace === "mail") target = document.querySelector(".ag-amail-top-actions");
-  else if (workspace === "wallet") target = document.querySelector(".ag-wallet-stage-header");
-  if (!visible(target) && !groupView) {
-    for (const selector of [".ag-conv-header-actions", ".ag-agora-header-actions", ".ag-amail-top-actions", ".ag-wallet-stage-header"]) {
-      target = [...document.querySelectorAll(selector)].find(visible) || null;
-      if (target) break;
-    }
-  }
-  if (target) {
-    for (const trigger of document.querySelectorAll("[data-ba-suite-trigger]")) {
-      if (!target.contains(trigger)) trigger.remove();
-    }
-    if (!target.querySelector("[data-ba-suite-trigger]")) {
-      const suite = document.createElement("button");
-      suite.type = "button";
-      suite.className = "ag-circle-btn ba-suite-trigger";
-      suite.setAttribute("data-ba-suite-trigger", "1");
-      suite.title = "Agnostr Suite";
-      suite.setAttribute("aria-label", "Agnostr Suite");
-      suite.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg>';
-      suite.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        openSuitePopover();
-      });
-      if (target.matches(".ag-wallet-stage-header, .ag-amail-top-actions")) target.append(suite);
-      else target.prepend(suite);
-    }
-  }
-
-}
-
 function ensureSuiteButton() {
   const footer = document.querySelector(".ag-suite-footer");
   for (const btn of document.querySelectorAll(".ag-suite-util-btn")) {
@@ -3363,7 +3277,6 @@ function ensureSuiteButton() {
   ensureSuiteBetter();
   const prev = footer.previousElementSibling;
   if (prev?.classList.contains("ag-suite-divider")) prev.style.removeProperty("display");
-  if (document.querySelector(".ag-suite-popover")) scheduleSuitePosition();
 }
 
 function activeEmojiGroup() {
@@ -4580,7 +4493,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.7";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.8";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4597,7 +4510,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.7"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.8"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
@@ -4723,6 +4636,15 @@ async function init() {
   state.activeTab = state.settings.ui.activeTab || "studio";
   state.betterTab = state.settings.ui.betterTab || "line";
   state.settings.ui.panelOpen = false;
+
+  api.storage.onChanged?.addListener((changes, area) => {
+    if (area !== "local") return;
+    const change = changes[STORAGE_KEY];
+    if (!change) return;
+    const before = change.oldValue?.enabled !== false;
+    const after = change.newValue?.enabled !== false;
+    if (before !== after) location.reload();
+  });
 
   window.addEventListener("message", handlePageMessage);
   document.addEventListener("ba-page", handlePageCustomEvent);

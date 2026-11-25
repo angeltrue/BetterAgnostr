@@ -2,6 +2,16 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.8 — Toolbar cleanup and master switch
+
+- Removed the Agnostr Suite buttons that Better Agnostr injected into workspace headers; the native app rail is now the single suite entry.
+- Kept the **Better Agnostr** shortcut in the Agnostr Suite footer.
+- Fixed the **Enable Better Agnostr** switch so it fully pauses the page bridge.
+- Disabled call filtering, signer patching, outgoing-event preparation, status timers, and socket logging while paused.
+- The background build refresher now stops requesting glub.chat while paused.
+- Toggling the master switch reloads every open Agnostr tab.
+- Restored the mobile **Chat** tab label after the Agnostr toolbar update.
+
 ## 1.1.7 — Restore the native app rail
 
 - Restored Agnostr's native desktop app rail after the latest Agnostr layout update.
