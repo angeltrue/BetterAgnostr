@@ -2,6 +2,16 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.11 — Brighter rainbow and scattered shooting stars
+
+- Brightened `&g` rainbow text with a screen-blended fill and a soft white glow.
+- Reduced the heavy dark shadow that made rainbow text look dim.
+- Kept emoji glyphs untouched by rainbow formatting.
+- Shooting stars now fire across 1–3 different visible flaired rows per trigger.
+- Each shooting star gets its own delay, start position, angle, length, duration, and path.
+- Restricted shooting-star targets to rows visible in the viewport.
+- Kept both Firefox and Chromium downloads in one release entry.
+
 ## 1.1.10 — Rainbow, stars, and client labels
 
 - Fixed flair-coloured `&g` rainbow text falling back to white.
