@@ -173,7 +173,7 @@ All Better Agnostr settings live in Agnostr Settings.
 - **Appearance:** Glub themes, custom CSS, and fonts.
 - **About:** current web build, Better Agnostr version, and credits. Angel's credit opens the native peer profile for `npub1t9kl0mq3f8pesupc9nqndpq389af4czsk7nnpvr5g6kg9hyenxvssjs0yk`.
 
-The toolbar popup has an **Enable Better Agnostr** switch. Turning it off reloads the current Agnostr tab without the extension UI or outgoing-event changes.
+The toolbar popup has an **Enable Better Agnostr** switch. Turning it off reloads every open Agnostr tab and fully pauses the extension: no UI, signer patching, call filtering, outgoing-event changes, status timers, or glub-build requests.
 
 ## How it works
 
@@ -195,7 +195,7 @@ Client and Glub tags are public claims. Client spoofing is not cryptographic ide
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.7-chromium.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.8-chromium.zip
 ```
 
 Source layout:

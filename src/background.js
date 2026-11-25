@@ -1,5 +1,6 @@
 const api = globalThis.browser ?? globalThis.chrome;
 const BUILD_KEY = "betterAgnostr.glubBuild.v1";
+const SETTINGS_KEY = "betterAgnostr.settings.v1";
 const CACHE_MS = 2 * 60 * 1000;
 const MAX_STALE_MS = 6 * 60 * 60 * 1000;
 
@@ -38,7 +39,17 @@ async function fetchBuild() {
   return build;
 }
 
+async function extensionEnabled() {
+  try {
+    const obj = await browser.storage.local.get(SETTINGS_KEY);
+    return obj?.[SETTINGS_KEY]?.enabled !== false;
+  } catch {
+    return true;
+  }
+}
+
 async function getGlubBuild({ force = false } = {}) {
+  if (!(await extensionEnabled())) return { build: "", fetchedAt: 0, disabled: true };
   const cached = await readCache();
   const age = cached ? Date.now() - Number(cached.fetchedAt || 0) : Infinity;
   if (!force && cached && age < CACHE_MS) {

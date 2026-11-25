@@ -26,6 +26,7 @@ async function refresh() {
   } catch {}
   document.getElementById("enabled").checked = enabled;
   document.getElementById("openPanel").disabled = !isAgnostr || !enabled;
+  document.getElementById("syncBuild").disabled = !enabled;
   document.getElementById("subtitle").textContent = !isAgnostr
     ? "open agnostr.com to use the in-page panel"
     : !enabled
@@ -59,17 +60,11 @@ document.getElementById("openPanel").addEventListener("click", async () => {
 
 document.getElementById("enabled").addEventListener("change", async (event) => {
   const enabled = !!event.target.checked;
-  const tab = await activeTab();
   try {
     const stored = await api.storage.local.get(STORAGE_KEY);
     const settings = stored?.[STORAGE_KEY] || {};
     await api.storage.local.set({ [STORAGE_KEY]: { ...settings, enabled } });
   } catch {}
-  if (tab?.id && /^https:\/\/([a-z0-9-]+\.)?agnostr\.com\//i.test(tab.url || "")) {
-    try {
-      await api.tabs.reload(tab.id);
-    } catch {}
-  }
   window.close();
 });
 

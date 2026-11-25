@@ -767,15 +767,6 @@ html.ba-calls-hidden .ag-ctx-item:has(.ag-ctx-item-label) {
 }
 
 /* --- consolidated rail / settings cleanup -------------------------------- */
-.ba-suite-trigger {
-  color: var(--text-secondary);
-}
-.ag-wallet-stage-header .ba-suite-trigger { margin-left: auto; }
-.ag-amail-top-actions .ba-suite-trigger,
-.ag-agora-header-actions .ba-suite-trigger { flex: 0 0 auto; }
-.ba-suite-trigger:hover {
-  color: var(--accent);
-}
 html.ba-hide-locate .ba-locate-hidden,
 html.ba-hide-locate button[aria-label^="Locate" i],
 html.ba-hide-locate button[title^="Locate" i] {

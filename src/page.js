@@ -35,6 +35,8 @@ import {
     token: null,
     configReady: false,
     configWaiters: [],
+    active: false,
+    callObserver: null,
     settings: normalizeSettings({}),
     events: new Map(),
     eventOrder: [],
@@ -99,6 +101,15 @@ import {
   function setConfig(settings) {
     const old = state.settings;
     state.settings = normalizeSettings(mergeSettings(state.settings, settings || {}));
+    const enabled = state.settings.enabled !== false;
+    const wasActive = state.active;
+    state.active = enabled;
+    if (enabled) {
+      window.WebSocket = BetterWebSocket;
+    } else {
+      window.WebSocket = NativeWebSocket;
+      if (wasActive) stopActiveWork();
+    }
     if (!state.configReady) {
       state.configReady = true;
       const waiters = state.configWaiters.splice(0);
@@ -161,8 +172,8 @@ import {
       state.token = data.token || state.token;
       setConfig(parseSettingsPayload(data.payload?.settings));
       publishStatus();
-      post("ready", { version: "1.1.7" });
-      start();
+      post("ready", { version: "1.1.8" });
+      if (state.active) start();
       return;
     }
     if (data.token && state.token && data.token !== state.token) return;
@@ -454,6 +465,7 @@ import {
   }
 
   function handleIncomingFrame(data, url) {
+    if (!state.active) return;
     if (typeof data !== "string") return;
     let frame;
     try {
@@ -533,6 +545,7 @@ import {
   }
 
   function prepareIncomingData(data) {
+    if (!state.active) return { drop: false, data, translated: false };
     if (typeof data !== "string") return { drop: false, data, translated: false };
     let frame;
     try {
@@ -1341,7 +1354,7 @@ import {
 
   async function prepareOutgoing(original, opts = {}) {
     if (!original || typeof original !== "object") return original;
-    if (state.settings.enabled === false) return original;
+    if (!state.active) return original;
     if (isPrepared(original)) return original;
     await waitForConfig();
     const settings = state.settings;
@@ -1523,7 +1536,7 @@ import {
   }
 
   function applyCallPolicy() {
-    if (state.settings.enabled === false) return;
+    if (!state.active) return;
     const calls = state.settings.privacy.calls;
     if (!calls.disable) return;
     // Remove call items that are already open in Agnostr's context menu.
@@ -1536,16 +1549,30 @@ import {
     } catch {}
   }
 
+  function stopActiveWork() {
+    if (state.statusTimer !== null) {
+      window.clearInterval(state.statusTimer);
+      state.statusTimer = null;
+    }
+    if (state.signerScanTimer !== null) {
+      window.clearInterval(state.signerScanTimer);
+      state.signerScanTimer = null;
+    }
+    state.callObserver?.disconnect();
+    state.callObserver = null;
+    state.started = false;
+  }
+
   function start() {
-    if (state.started) return;
+    if (state.started || !state.active) return;
     state.started = true;
     startSignerWatch();
     if (state.statusTimer === null) {
       state.statusTimer = window.setInterval(publishStatus, 2500);
     }
-    const observer = new MutationObserver(() => applyCallPolicy());
+    state.callObserver = new MutationObserver(() => applyCallPolicy());
     try {
-      observer.observe(document.documentElement, { childList: true, subtree: true });
+      state.callObserver.observe(document.documentElement, { childList: true, subtree: true });
     } catch {}
     publishStatus();
   }
