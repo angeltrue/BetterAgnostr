@@ -4,7 +4,7 @@
 :root,
 :host {
 	--ba-rainbow-generic: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#ff5555 0%,
 		#ffcc00 8%,
 		#55ff55 16%,
@@ -17,8 +17,11 @@
 	--ba-rainbow-bg: transparent;
 	--ba-rainbow-blend: normal;
 	--ba-rainbow-shadow: none;
-	--ba-rainbow-shadow-flair: 0 1px 1px rgba(0, 0, 0, 0.68), 0 0 7px rgba(0, 0, 0, 0.32);
-	--ba-rainbow-direction: normal;
+	--ba-rainbow-shadow-flair: none;
+	--ba-rainbow-angle: 90deg;
+	--ba-rainbow-rain-angle: 180deg;
+	--ba-rainbow-rain-size: 100% 26px;
+	--ba-rainbow-rain-end: 0 26px;
 }
 
 .fmtRainbow {
@@ -31,13 +34,12 @@
 	-webkit-text-fill-color: transparent;
 	color: transparent;
 	animation: fmtRainbow 6s linear infinite;
-	animation-direction: var(--ba-rainbow-direction, normal) !important;
 	text-shadow: var(--ba-rainbow-shadow, none);
 	text-decoration-color: #ff8fb0;
 }
 @keyframes fmtRainbow {
 	to {
-		background-position: -200% 0;
+		background-position: 200% 0;
 	}
 }
 
@@ -49,14 +51,14 @@
 .flair .fmtRainbow,
 [data-ba-flair] .fmtRainbow {
 	background-image: var(--ba-rainbow-flair);
-	text-shadow: var(--ba-rainbow-shadow-flair, 0 1px 1px rgba(0, 0, 0, 0.68), 0 0 7px rgba(0, 0, 0, 0.32));
+	text-shadow: var(--ba-rainbow-shadow-flair, none);
 }
 
 /* Bright rainbow mode. */
 html[data-ba-rainbow="bright"],
 :host([data-ba-rainbow="bright"]) {
 	--ba-rainbow-generic: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#ff6b6b 0%,
 		#ffd93d 8%,
 		#6bff8f 16%,
@@ -66,7 +68,7 @@ html[data-ba-rainbow="bright"],
 		#ff6b6b 48%
 	);
 	--ba-rainbow-flair: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#ff6b6b 0%,
 		#ffd93d 8%,
 		#6bff8f 16%,
@@ -79,7 +81,10 @@ html[data-ba-rainbow="bright"],
 	--ba-rainbow-blend: screen;
 	--ba-rainbow-shadow: 0 0 7px rgba(255, 255, 255, 0.5), 0 1px 1px rgba(0, 0, 0, 0.42);
 	--ba-rainbow-shadow-flair: 0 0 8px rgba(255, 255, 255, 0.56), 0 1px 1px rgba(0, 0, 0, 0.46);
-	--ba-rainbow-direction: reverse;
+	--ba-rainbow-angle: 270deg;
+	--ba-rainbow-rain-angle: 270deg;
+	--ba-rainbow-rain-size: 200% 100%;
+	--ba-rainbow-rain-end: 200% 0;
 }
 
 .fmtEmoji {
@@ -94,7 +99,7 @@ html[data-ba-rainbow="bright"],
 
 .flair-fire .fmtRainbow {
 	background-image: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#ff3d00 0%,
 		#ff7a18 8%,
 		#ffb057 16%,
@@ -128,14 +133,14 @@ html[data-ba-rainbow="bright"],
 		filter: brightness(1.38) saturate(1.15);
 	}
 	100% {
-		background-position: -200% 0;
+		background-position: 200% 0;
 		filter: brightness(0.88) saturate(1);
 	}
 }
 
 .flair-lightning .fmtRainbow {
 	background-image: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#00a6ff 0%,
 		#3fc9ff 12%,
 		#a5ecff 24%,
@@ -182,14 +187,14 @@ html[data-ba-rainbow="bright"],
 		filter: brightness(0.62);
 	}
 	99.9% {
-		background-position: -140% 0;
+		background-position: 140% 0;
 	}
 }
 
 .flair-rain .fmtRainbow {
 	
 	background-image: linear-gradient(
-		270deg,
+		var(--ba-rainbow-rain-angle, 180deg),
 		#3f7fc4 0%,
 		#6fb2e8 23%,
 		#c4e7ff 42%,
@@ -197,7 +202,7 @@ html[data-ba-rainbow="bright"],
 		#5595d4 81%,
 		#3f7fc4 100%
 	);
-	background-size: 200% 100%;
+	background-size: var(--ba-rainbow-rain-size, 100% 26px);
 	background-repeat: repeat;
 	animation: fmtRainText var(--rain-text-dur, 3.2s) linear var(--rain-text-delay, 0s) infinite;
 	text-decoration-color: #a9d6f5;
@@ -212,14 +217,14 @@ html[data-ba-rainbow="bright"],
 		filter: brightness(1.16);
 	}
 	100% {
-		background-position: -200% 0;
+		background-position: var(--ba-rainbow-rain-end, 0 26px);
 		filter: brightness(0.95);
 	}
 }
 
 .flair-plume .fmtRainbow {
 	background-image: linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#7e3ff2 0%,
 		#a855f7 18%,
 		#d8b4fe 34%,
@@ -243,14 +248,14 @@ html[data-ba-rainbow="bright"],
 		filter: brightness(1.3);
 	}
 	100% {
-		background-position: -220% 0;
+		background-position: 220% 0;
 		filter: brightness(0.92);
 	}
 }
 
 .flair-neon .fmtRainbow {
 	background-image: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#55ffff 0%,
 		#55ffff 6%,
 		#c7ffff 8.5%,
@@ -273,7 +278,7 @@ html[data-ba-rainbow="bright"],
 
 .flair-stars .fmtRainbow {
 	background-image: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#ffffff 0%,
 		#cfe6ff 8%,
 		#a8ccff 16%,
@@ -854,7 +859,7 @@ html.retro .flairScan {
 
 .flair-matrix .fmtRainbow {
 	background-image: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#00913a 0%,
 		#00ff41 9%,
 		#d8ffe6 13%,
@@ -899,15 +904,6 @@ html.retro .flairScan {
 	}
 }
 
-.flair-sonar .flairScan {
-	background: radial-gradient(
-		circle at var(--son-x, 30%) var(--son-y, 50%),
-		rgba(46, 255, 160, 0.1) 0%,
-		rgba(46, 255, 160, 0.03) 38%,
-		transparent 64%
-	);
-}
-
 .flair-sonar > .flairFx {
 	inset: 0;
 	opacity: 1;
@@ -922,11 +918,31 @@ html.retro .flairScan {
 	height: var(--son-reach, 170px);
 	border-radius: 50%;
 	border: 2px solid rgba(125, 255, 194, 0.95);
-	box-shadow: 0 0 6px rgba(46, 255, 160, 0.4);
 	opacity: 0;
+	/* Chromium mis-rasterizes a box-shadow on a border-radius element while it is
+	   being scaled: on some frames the shadow shows up as a large thin cross through
+	   the middle of the ring. The glow is painted as a gradient pseudo-element
+	   instead, and the ring itself is promoted to its own layer so the 2px border
+	   and its radius rasterize together. */
+	will-change: transform;
 	
 	animation: flairSonarPing var(--son-ping, 10s) linear
 		calc(var(--son-phase, 0s) - var(--son-ping, 10s) * var(--r-i, 0) * var(--son-gap, 0.09)) infinite;
+}
+
+.flair-sonar .ping::before {
+	content: "";
+	position: absolute;
+	inset: -6px;
+	border-radius: 50%;
+	background: radial-gradient(
+		circle closest-side,
+		transparent 0%,
+		rgba(46, 255, 160, 0.08) 80%,
+		rgba(46, 255, 160, 0.26) 92%,
+		transparent 100%
+	);
+	pointer-events: none;
 }
 
 @keyframes flairSonarPing {
@@ -977,7 +993,7 @@ html.retro .flairScan {
 
 .flair-sonar .fmtRainbow {
 	background-image: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#f2fff9 0%,
 		#f2fff9 0.5%,
 		#9dffd2 2%,
@@ -1084,7 +1100,7 @@ html.retro .flairScan {
 
 .flair-fireflies .fmtRainbow {
 	background-image: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#4d7a24 0%,
 		#7fbf2f 10%,
 		#b6f542 20%,
@@ -1293,7 +1309,7 @@ html.retro .flairScan {
 
 .flair-aurora .fmtRainbow {
 	background-image: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#1fd98a 0%,
 		#3dffa8 8%,
 		#7cffd4 15%,
@@ -1451,7 +1467,7 @@ html.retro .flairScan {
 
 .flair-sol .fmtRainbow {
 	background-image: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#ffffff 0%,
 		#fffdf6 10%,
 		#fff8e4 19%,
@@ -1584,14 +1600,14 @@ html.retro .flairScan {
 }
 
 .flair-glitch .fmtRainbow {
-	background-image: repeating-linear-gradient(270deg, #37e8ff 0%, #b9f4ff 16%, #ff3ba7 34%, #ffd0e8 52%, #37e8ff 74%, #7de6ff 88%, #37e8ff 100%);
+	background-image: repeating-linear-gradient(var(--ba-rainbow-angle, 90deg), #37e8ff 0%, #b9f4ff 16%, #ff3ba7 34%, #ffd0e8 52%, #37e8ff 74%, #7de6ff 88%, #37e8ff 100%);
 	animation-duration: var(--gl-text-dur, 8s);
 	animation-delay: var(--gl-text-delay, 0s);
 	text-decoration-color: #ff3ba7;
 }
 
 .flair-bitcoin .fmtRainbow {
-	background-image: repeating-linear-gradient(270deg, #b8791a 0%, #ffd469 22%, #fff0c2 38%, #ffb63d 58%, #a5670f 78%, #b8791a 100%);
+	background-image: repeating-linear-gradient(var(--ba-rainbow-angle, 90deg), #b8791a 0%, #ffd469 22%, #fff0c2 38%, #ffb63d 58%, #a5670f 78%, #b8791a 100%);
 	animation-duration: var(--cir-text-dur, 9s);
 	animation-delay: var(--cir-text-delay, 0s);
 	text-decoration-color: #ffd469;
@@ -1779,7 +1795,7 @@ html.retro .flairScan {
 
 .flair-bubbles .fmtRainbow {
 	background-image: repeating-linear-gradient(
-		270deg,
+		var(--ba-rainbow-angle, 90deg),
 		#2f9fb5 0%,
 		#4fc8d8 10%,
 		#7ef0e6 20%,

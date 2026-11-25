@@ -44,7 +44,7 @@ A Firefox extension for **agnostr.com**: event inspector, Glub line and flair st
 - **Hug / Slap / Custom action** commands, including `/me <text>`.
 - **Categorized emoji picker** with 2,300+ base emoji.
 - **Full-width stars flair** with randomized shooting stars.
-- **Selectable rainbow styles:** Glub (default, matches glub.chat) or Bright (high-contrast glow).
+- **Glub rainbow toggle** in Appearance: on for glub.chat's original palette and motion, off for the bright rainbow.
 - **Automatic settings backup** that survives extension updates and storage loss.
 - Native app rail with workspace switching, groups, settings, and the Agnostr Suite.
 
@@ -57,7 +57,7 @@ Everything runs locally. The extension has no server, sends no keys anywhere, an
 3. Choose **Load Temporary Add-on…** and select `dist/manifest.json`.
 4. Open or reload <https://agnostr.com/>.
 
-The unsigned XPI is in `release/`. Firefox 128 or newer is required. For Chromium 148+, load `release/better-agnostr-1.1.14-chromium.zip` as an unpacked extension. The Chromium manifest uses a stable key, so replacing the unpacked folder keeps the same extension ID and settings.
+The unsigned XPI is in `release/`. Firefox 128 or newer is required. For Chromium 148+, load `release/better-agnostr-1.1.15-chromium.zip` as an unpacked extension. The Chromium manifest uses a stable key, so replacing the unpacked folder keeps the same extension ID and settings.
 
 ## Usage
 
@@ -72,7 +72,7 @@ Open **Agnostr Settings → Better Agnostr**. On mobile, open **Apps → Setting
 - `&l` bold, `&o` italic, `&n` underline, `&m` strike, `&k` obfuscate, `&g` rainbow, `&r` reset, `&0`–`&f` colours.
 - Placeholders: `{name}`, `{tag}`, `{msg}`. A template without `{msg}` gets the message appended.
 - Flairs: fire, lightning, stars, rain, plume, neon, matrix, sonar, fireflies, bubbles, aurora, bitcoin, glitch, and sol.
-- Rainbow style is selectable: **Glub** (default, glub.chat palette and motion) or **Bright** (high-contrast glow). Both leave emoji colours intact.
+- Rainbow style is selectable under **Appearance → Glub rainbow**: on for glub.chat's palette and motion (default), off for the bright rainbow. Both leave emoji colours intact.
 - `&k` obfuscates usernames and message text.
 - `sol` is gated by glub.chat's NIP-05 rule.
 
@@ -125,14 +125,14 @@ The toolbar popup's **Enable Better Agnostr** switch reloads every open Agnostr 
 - **Better Agnostr → Client:** client tag and per-event policies.
 - **Privacy & Trust → Better Agnostr:** privacy and call controls.
 - **Notifications:** native notification controls plus Better Agnostr chimes and clicks.
-- **Appearance:** Glub themes, custom CSS, fonts.
+- **Appearance:** Glub themes, Glub rainbow toggle, custom CSS, fonts.
 - **About:** web build, extension version, credits.
 
 ## Development
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.14.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.15.zip
 ```
 
 Source layout:
