@@ -134,6 +134,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  -webkit-text-fill-color: currentColor !important;
+  text-shadow: none !important;
+  animation: none !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
 }
 .ba-better-name::after {
   content: "BA";
@@ -146,6 +151,17 @@
 .ag-msg-head .ba-better-name::after,
 .ag-msg-head .ba-client-name::after { transform: translateY(-1px); }
 .ag-peer-modal-name.ba-better-name::after { margin-left: 6px; }
+
+.ag-peer-client-pill.ba-client-pill-unknown {
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border-color: var(--border-subtle);
+}
+.ag-peer-client-pill.ba-client-pill-ba {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-default));
+}
 
 /* --- line template colours inside Agnostr rows --------------------------- */
 .ag-msg-row .ag-msg-author.ba-line-name-color:not(.fmtRainbow) {
@@ -1393,3 +1409,9 @@ html.ba-hide-locate button[title^="Locate" i] {
 
 /* Blocked-user message runs are noise when Better Agnostr is active. */
 html.ba-active .ag-blocked-run { display: none !important; }
+
+/* Optional privacy mode: hide per-message clock times. */
+html.ba-hide-timestamps .ag-msg-row .ag-msg-time,
+html.ba-hide-timestamps .ag-msg-row .ag-msg-gutter-time {
+  display: none !important;
+}

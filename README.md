@@ -37,10 +37,10 @@ A Firefox extension for **agnostr.com**: event inspector, Glub line and flair st
 - **JSON event viewer** with tags, signatures, relay frames, and Glub previews.
 - **Glub line/flair studio** with live preview, themes, and the live Glub build stamp.
 - **Client-tag controls** with leave, spoof, and strip policies.
-- **Privacy tools** for tag scrubbing, review before signing, teleport omission, Locate Me, voice memos, and call blocking.
+- **Privacy tools** for tag scrubbing, review before signing, teleport omission, Locate Me, timestamps, voice memos, and call blocking.
 - **Better Agnostr chimes** with 12 message sounds, 12 UI clicks, volume, and chime triggers.
 - **12 Glub themes**, custom CSS, and bundled fonts.
-- **Better Agnostr badges** plus spoofed-client labels in chat.
+- **Better Agnostr badges** plus spoofed-client labels in chat and profiles.
 - **Hug / Slap / Custom action** commands, including `/me <text>`.
 - **Categorized emoji picker** with 2,300+ base emoji.
 - **Full-width stars flair** with randomized shooting stars.
@@ -56,7 +56,7 @@ Everything runs locally. The extension has no server, sends no keys anywhere, an
 3. Choose **Load Temporary Add-on…** and select `dist/manifest.json`.
 4. Open or reload <https://agnostr.com/>.
 
-The unsigned XPI is in `release/`. Firefox 128 or newer is required. For Chromium 148+, load `release/better-agnostr-1.1.12-chromium.zip` as an unpacked extension. The Chromium manifest uses a stable key, so replacing the unpacked folder keeps the same extension ID and settings.
+The unsigned XPI is in `release/`. Firefox 128 or newer is required. For Chromium 148+, load `release/better-agnostr-1.1.13-chromium.zip` as an unpacked extension. The Chromium manifest uses a stable key, so replacing the unpacked folder keeps the same extension ID and settings.
 
 ## Usage
 
@@ -85,14 +85,14 @@ Set a client value and a policy per event group:
 - **spoof** — replace it with your chosen value.
 - **strip** — remove it.
 
-Chat defaults to spoofing as `BetterAgnostr`. Selecting `glub.chat` also stamps the live Glub build. Unknown clients appear as a small plaque in chat; known BA users who spoof show **BA · client**. Sealed DM and mesh events cannot be rewritten.
+Chat defaults to spoofing as `BetterAgnostr`. Selecting `glub.chat` also stamps the live Glub build. Unknown clients appear as a small plaque in chat and in the profile client pill; known BA users who spoof show **BA · client**. Sealed DM and mesh events cannot be rewritten.
 
 ### Privacy
 
 - **Calls & video:** blocks call signals/events and hides call UI.
 - **Metadata scrubber:** removes selected tags and tracking parameters.
 - **Review before signing:** inspect and remove tags before sending.
-- **Locate Me, teleport, voice memo:** configurable visibility/omission.
+- **Locate Me, timestamps, teleport, voice memo:** configurable visibility/omission. Timestamps are hidden only when enabled.
 
 Controls live under **Settings → Privacy & Trust → Better Agnostr**.
 
@@ -131,7 +131,7 @@ The toolbar popup's **Enable Better Agnostr** switch reloads every open Agnostr 
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.12.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.13.zip
 ```
 
 Source layout:

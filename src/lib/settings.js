@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS = {
     stripTags: [],
     stripTracking: true,
     hideLocate: true,
+    hideTimestamps: false,
     omitTeleport: true,
     removeVoiceMemo: true,
     reviewEnabled: false,
@@ -157,6 +158,7 @@ export function normalizeSettings(raw) {
   s.privacy.stripTags = [...new Set(s.privacy.stripTags.filter((t) => typeof t === "string" && /^[a-zA-Z0-9_-]+$/.test(t)))];
   s.privacy.stripTracking = s.privacy.stripTracking !== false;
   s.privacy.hideLocate = s.privacy.hideLocate !== false;
+  s.privacy.hideTimestamps = s.privacy.hideTimestamps === true;
   s.privacy.omitTeleport = s.privacy.omitTeleport === true;
   s.privacy.removeVoiceMemo = s.privacy.removeVoiceMemo !== false;
   s.privacy.reviewEnabled = s.privacy.reviewEnabled === true;
