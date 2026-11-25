@@ -2,6 +2,18 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.15 — Sonar rings, exact Glub rainbow, Appearance toggle
+
+- Restored the sonar CRT scanline glass.
+- Fixed the thin cross in sonar rings by replacing the ring box-shadow with a gradient glow and promoting each scaled ring to its own compositing layer.
+- Reimplemented the Glub rainbow from glub.chat: 90° gradient, 200% scroll, 6-second timing, no screen blend, no white glow.
+- Flair-specific rainbows use the same 90° axis in Glub mode, and rain's wildcard flows vertically.
+- Bright keeps the previous 270° high-contrast rainbow.
+- Moved the rainbow choice to **Appearance → Glub rainbow** and replaced the chip selector with an inline toggle switch.
+- Kept the rainbow choice device-local.
+- Left aurora unchanged.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.1.14 — Rainbow styles, aurora, sonar, selection fix
 
 - Added a selectable **Rainbow style** under Better Agnostr → Line.

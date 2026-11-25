@@ -1096,6 +1096,19 @@ function customCssGroupHtml() {
   </div>`;
 }
 
+function rainbowStyleGroupHtml() {
+  const glub = state.settings.studio.rainbowStyle !== "bright";
+  return `<div class="ag-set-group" data-ba-settings-group="rainbow">
+    <label class="ag-set-toggle-card ba-set-toggle">
+      <div class="ag-set-toggle-copy">
+        <span class="ag-set-toggle-title">Glub rainbow</span>
+        <span class="ag-set-toggle-desc">Use glub.chat's rainbow palette and motion; off switches to the bright rainbow</span>
+      </div>
+      <input class="ag-switch" type="checkbox" data-ba-rainbow-toggle${glub ? " checked" : ""}>
+    </label>
+  </div>`;
+}
+
 function baToggle(path, title, desc = "") {
   const checked = !!getPath(state.settings, path);
   return `<label class="ag-set-toggle-card ba-set-toggle">
@@ -1129,15 +1142,6 @@ function betterLineHtml() {
     <div class="ag-set-group">
       ${baToggle("studio.enabled", "Apply line & flair", "Outgoing chat messages")}
       ${baToggle("studio.applyRich", "Convert & codes", "Keep plaintext in content")}
-    </div>
-
-    <div class="ag-set-group">
-      <span class="ag-set-label">Rainbow style</span>
-      <div class="ba-set-chips">
-        <button type="button" class="ba-set-chip" data-ba-rainbow-style="glub">Glub</button>
-        <button type="button" class="ba-set-chip" data-ba-rainbow-style="bright">Bright</button>
-      </div>
-      <div class="ba-set-note" style="margin-top:6px">Glub matches glub.chat. Bright uses the high-contrast rainbow. This choice stays on this device.</div>
     </div>
 
     <div class="ag-set-group">
@@ -1254,7 +1258,7 @@ function renderBetterPreview(modal) {
   const tag = (state.status?.pubkey || "a1b2c3d4").slice(-4);
   const msg = PREVIEW_MESSAGE;
   const avatar = previewAvatarSrc();
-  const sig = JSON.stringify([template, flair, msg, name, tag, avatar, s.studio.enabled, s.studio.reduceMotion]);
+  const sig = JSON.stringify([template, flair, msg, name, tag, avatar, s.studio.enabled, s.studio.reduceMotion, s.studio.rainbowStyle]);
   if (sig === state.betterPreviewSig) return;
   state.betterPreviewSig = sig;
   const msgHtml = renderFormatHtml(msg);
@@ -1298,9 +1302,6 @@ function syncBetterSettings(modal) {
   for (const el of modal.querySelectorAll("[data-ba-flair-choice]")) {
     const active = (el.getAttribute("data-ba-flair-choice") || "") === (state.settings.studio.flair || "");
     el.classList.toggle("active", active);
-  }
-  for (const el of modal.querySelectorAll("[data-ba-rainbow-style]")) {
-    el.classList.toggle("is-active", (el.getAttribute("data-ba-rainbow-style") || "glub") === state.settings.studio.rainbowStyle);
   }
   const count = modal.querySelector("[data-ba-template-count]");
   if (count) {
@@ -1460,7 +1461,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.14";
+  const version = manifest.version || "1.1.15";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1600,6 +1601,9 @@ function syncSettingsFields(modal) {
   for (const el of modal.querySelectorAll("[data-ba-setting-toggle]")) {
     const value = !!getPath(state.settings, el.getAttribute("data-ba-setting-toggle"));
     el.classList.toggle("is-on", value);
+  }
+  for (const el of modal.querySelectorAll("[data-ba-rainbow-toggle]")) {
+    el.checked = state.settings.studio.rainbowStyle !== "bright";
   }
   syncThemeCards(modal);
   const status = modal.querySelector("[data-ba-status]");
@@ -1777,12 +1781,19 @@ function injectAppearanceExtras(modal) {
       const anchor = agnThemeGrid.closest(".ag-set-group") || agnThemeGrid;
       anchor.after(themeGroup);
     }
+    let rainbowGroup = stack.querySelector("[data-ba-settings-group='rainbow']");
+    if (!rainbowGroup) {
+      const holder = document.createElement("div");
+      holder.innerHTML = rainbowStyleGroupHtml();
+      rainbowGroup = holder.firstElementChild;
+      themeGroup.after(rainbowGroup);
+    }
     let cssGroup = stack.querySelector("[data-ba-settings-group='css']");
     if (!cssGroup) {
       const holder = document.createElement("div");
       holder.innerHTML = customCssGroupHtml();
       cssGroup = holder.firstElementChild;
-      themeGroup.after(cssGroup);
+      rainbowGroup.after(cssGroup);
     }
     let fontGroup = stack.querySelector("[data-ba-settings-group='font']");
     if (!fontGroup) {
@@ -2177,20 +2188,6 @@ document.addEventListener(
       }
       return;
     }
-    const rainbowStyle = target.closest("[data-ba-rainbow-style]");
-    if (rainbowStyle) {
-      event.preventDefault();
-      const style = rainbowStyle.getAttribute("data-ba-rainbow-style") === "bright" ? "bright" : "glub";
-      updateSettings((s) => {
-        s.studio.rainbowStyle = style;
-      });
-      const modal = document.querySelector(".ag-settings-modal");
-      if (modal) {
-        state.betterPreviewSig = "";
-        syncBetterSettings(modal);
-      }
-      return;
-    }
     const flairChoice = target.closest("[data-ba-flair-choice]");
     if (flairChoice) {
       event.preventDefault();
@@ -2344,6 +2341,12 @@ document.addEventListener(
         if (target.checked) set.add(name);
         else set.delete(name);
         s.privacy.stripTags = [...set];
+      });
+      return;
+    }
+    if (target.matches("[data-ba-rainbow-toggle]")) {
+      updateSettings((s) => {
+        s.studio.rainbowStyle = target.checked ? "glub" : "bright";
       });
       return;
     }
@@ -4799,7 +4802,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.14";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.15";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4816,7 +4819,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.14"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.15"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
