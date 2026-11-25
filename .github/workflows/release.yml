@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+    tags-ignore:
+      - "v*-chromium.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release branch
+        uses: actions/checkout@v4
+
+      - name: Check out Chromium build
+        uses: actions/checkout@v4
+        with:
+          ref: main-chromium
+          path: chromium
+
+      - name: Determine version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release assets
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          test -f "release/better-agnostr-${VERSION}.xpi"
+          test -f "release/better-agnostr-${VERSION}.zip"
+          test -f "chromium/release/better-agnostr-${VERSION}-chromium.zip"
+
+      - name: Locate release notes
+        id: notes
+        run: |
+          TAG="${{ steps.version.outputs.version }}"
+          FILE="release/RELEASE_NOTES-${TAG}.md"
+          if [ -f "$FILE" ]; then
+            echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          else
+            echo "file=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Remove existing release for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete "$GITHUB_REF_NAME" --yes || true
+
+      - name: Publish combined GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Better Agnostr ${{ github.ref_name }}
+          body_path: ${{ steps.notes.outputs.file }}
+          files: |
+            release/better-agnostr-${{ steps.version.outputs.version }}.xpi
+            release/better-agnostr-${{ steps.version.outputs.version }}.zip
+            chromium/release/better-agnostr-${{ steps.version.outputs.version }}-chromium.zip
+          fail_on_unmatched_files: true

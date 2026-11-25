@@ -37,6 +37,27 @@ import {
 const api = globalThis.browser ?? globalThis.chrome;
 const NATIVE_NOTIFICATIONS_KEY = "agnostr:v2:notifications";
 const NATIVE_NOTIFICATIONS_BACKUP = "betterAgnostr.nativeNotifications.v1";
+const SETTINGS_BACKUP_KEY = "betterAgnostr.settings.backup.v1";
+
+function readSettingsBackup() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_BACKUP_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    return saved?.settings && typeof saved.settings === "object" ? saved.settings : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSettingsBackup(settings) {
+  try {
+    localStorage.setItem(
+      SETTINGS_BACKUP_KEY,
+      JSON.stringify({ version: 1, savedAt: Date.now(), settings }),
+    );
+  } catch {}
+}
 
 function overrideNativeNotifications() {
   try {
@@ -183,6 +204,8 @@ const state = {
 function h(value) {
   return escapeHtml(String(value ?? ""));
 }
+const EMOJI_DOM_RE = /(?:[\u{1F1E6}-\u{1F1FF}]{2}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:\uFE0F|\u20E3|[\u{1F3FB}-\u{1F3FF}])?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|[\u{1F3FB}-\u{1F3FF}])?)*)/gu;
+
 const OBF_BUCKETS = [
   "0123456789",
   "abcdefghijklmnopqrstuvwxyz",
@@ -367,6 +390,7 @@ function debounceSave() {
 }
 
 async function persistSettings() {
+  writeSettingsBackup(state.settings);
   try {
     await api.storage.local.set({ [STORAGE_KEY]: state.settings });
   } catch (err) {
@@ -1395,7 +1419,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.9";
+  const version = manifest.version || "1.1.10";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1734,34 +1758,41 @@ function shootStar(el) {
   if (typeof el.animate !== "function") return;
   const layer = el.parentElement;
   const row = layer?.closest(".ag-msg-row") || layer;
-  if (!row) return;
+  if (!layer || !row) return;
   const line = row.querySelector(".ag-msg-rich") || row.querySelector(".ag-msg-content") || row;
   const rowRect = row.getBoundingClientRect();
   const lineRect = line.getBoundingClientRect();
-  const w = Math.max(40, lineRect.width);
-  const h = Math.max(12, lineRect.height);
   const offsetX = Math.max(0, lineRect.left - rowRect.left);
   const offsetY = Math.max(0, lineRect.top - rowRect.top);
-  const starW = 44;
-  const angle = 6 + Math.random() * 12;
-  const x0 = offsetX - starW + 2;
-  const x1 = offsetX + Math.max(starW + 1, Math.min(w - starW - 1, w * 0.72));
-  const y0 = offsetY + 2 + Math.random() * Math.max(1, h * 0.18);
-  const drop = Math.min(
-    Math.max(2, h - 4),
-    Math.abs(x1 - x0) * Math.tan((angle * Math.PI) / 180) * 0.3,
-  );
-  const y1 = Math.min(offsetY + h - 2, y0 + drop);
-  const rot = `rotate(${angle.toFixed(1)}deg)`;
-  el.animate(
-    [
-      { transform: `translate3d(${x0.toFixed(1)}px, ${y0.toFixed(1)}px, 0) ${rot}`, opacity: 0 },
-      { opacity: 0.95, offset: 0.2 },
-      { opacity: 0.85, offset: 0.7 },
-      { transform: `translate3d(${x1.toFixed(1)}px, ${y1.toFixed(1)}px, 0) ${rot}`, opacity: 0 },
-    ],
-    { duration: 420 + Math.random() * 280, easing: "cubic-bezier(.2,.65,.3,1)" },
-  );
+  const w = Math.max(60, rowRect.width - offsetX - 4);
+  const h = Math.max(12, lineRect.height);
+  const count = 1 + ((Math.random() * 2.4) | 0);
+  for (let i = 0; i < count; i++) {
+    const star = document.createElement("span");
+    star.className = "ba-shooting-star";
+    star.setAttribute("aria-hidden", "true");
+    const length = 30 + Math.random() * 42;
+    star.style.width = `${length.toFixed(1)}px`;
+    layer.appendChild(star);
+    const startX = offsetX + 4 + Math.random() * Math.max(1, w * 0.72);
+    const startY = offsetY + 3 + Math.random() * Math.max(1, h - 6);
+    const travel = Math.max(50, Math.min(w - (startX - offsetX) - 8, 90 + Math.random() * 300));
+    const angle = 6 + Math.random() * 12;
+    const endX = startX + travel;
+    const endY = Math.min(offsetY + h - 2, startY + travel * Math.tan((angle * Math.PI) / 180) * 0.32);
+    const rotation = `rotate(${angle.toFixed(1)}deg)`;
+    const anim = star.animate(
+      [
+        { transform: `translate3d(${startX.toFixed(1)}px, ${startY.toFixed(1)}px, 0) ${rotation}`, opacity: 0 },
+        { opacity: 0.95, offset: 0.18 },
+        { opacity: 0.85, offset: 0.72 },
+        { transform: `translate3d(${endX.toFixed(1)}px, ${endY.toFixed(1)}px, 0) ${rotation}`, opacity: 0 },
+      ],
+      { duration: 430 + Math.random() * 420, easing: "cubic-bezier(.2,.65,.3,1)" },
+    );
+    anim.onfinish = () => star.remove();
+    anim.oncancel = () => star.remove();
+  }
 }
 
 function visibleFxTargets(selector) {
@@ -1850,7 +1881,7 @@ function flairTickerTick() {
   if (document.hidden || state.settings.studio.reduceMotion || state.settings.studio.renderInAgnostr === false) return;
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
   const stars = visibleFxTargets(".flair-stars > .flairFx");
-  if (stars.length && Math.random() < 0.13) shootStar(stars[Math.floor(Math.random() * stars.length)]);
+  if (stars.length && Math.random() < 0.18) shootStar(stars[Math.floor(Math.random() * stars.length)]);
   rollFxTargets(".flair-lightning > .flairFx", 0.13, flairStrike, 3);
   rollFxTargets(".flair-bitcoin > .flairFx", 0.3, circuitSurge, 4);
 }
@@ -3464,9 +3495,6 @@ function decorateRows() {
     const id = row.id?.startsWith("msg-") ? row.id.slice(4) : "";
     if (!id) continue;
     ensureRowButtons(row, id);
-    const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
-    const signature = `${id}:${state.settingsEpoch}:${ownPubkey}`;
-    if (row.dataset.baDecorated === signature) continue;
     const ev = eventById(id);
     if (!ev) {
       if (!state.pendingLookups.has(id) && state.pageReady) {
@@ -3481,6 +3509,10 @@ function decorateRows() {
       }
       continue;
     }
+    markRowClientLabels(row, ev);
+    const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
+    const signature = `${id}:${state.settingsEpoch}:${ownPubkey}`;
+    if (row.dataset.baDecorated === signature) continue;
     decorateRow(row, ev);
     row.dataset.baDecorated = signature;
   }
@@ -3537,9 +3569,25 @@ function knownBetterHandle(handle) {
   return false;
 }
 
-function markRowClientPlaque(row, better) {
-  if (!(row instanceof HTMLElement)) return;
-  setBetterName(row.querySelector(".ag-msg-author"), better);
+const KNOWN_VISUAL_CLIENTS = new Set(["agnostr", "glub.chat", "glubchat", "glub", "nymchat", "nym"]);
+
+function markRowClientLabels(row, ev) {
+  if (!(row instanceof HTMLElement) || !ev) return;
+  const author = row.querySelector(".ag-msg-author");
+  if (!(author instanceof HTMLElement)) return;
+  const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
+  const ownMessage = !!ev.pubkey && String(ev.pubkey).toLowerCase() === ownPubkey;
+  const known = !!ev.pubkey && state.betterPeers.has(String(ev.pubkey).toLowerCase());
+  const better = isBetterClient(ev) || (ownMessage && ownBetterClient()) || known;
+  const client = String(getTagValue(ev.tags, "client") || "").trim().slice(0, 32);
+  const clientKey = client.toLowerCase();
+  const spoofed = better && !!client && !/^(betteragnostr|better-agnostr|better agnostr)$/i.test(client);
+  const showClient = !better && !!client && !KNOWN_VISUAL_CLIENTS.has(clientKey);
+  setBetterName(author, better);
+  author.classList.toggle("ba-better-spoof", spoofed);
+  author.classList.toggle("ba-client-name", showClient);
+  if (spoofed || showClient) author.dataset.baClient = client;
+  else delete author.dataset.baClient;
 }
 
 function markBetterClients() {
@@ -3619,7 +3667,6 @@ function decorateRow(row, ev) {
   const ownMessage = !!ev.pubkey && String(ev.pubkey).toLowerCase() === ownPubkey;
   const better = isBetterClient(ev) || (ownMessage && ownBetterClient());
   if (better && ev.pubkey) state.betterPeers.set(ev.pubkey.toLowerCase(), eventHandle(ev));
-  markRowClientPlaque(row, better);
 
   if (hasGlub && state.settings.studio.renderInAgnostr && meta.flair && isValidFlair(meta.flair)) {
     applyFlair(row, ev, meta.flair);
@@ -3670,8 +3717,48 @@ function lineVisual(st) {
   return Object.keys(out).length ? out : null;
 }
 
+function protectRainbowEmojis(el, enabled) {
+  if (!(el instanceof HTMLElement)) return;
+  if (!enabled) {
+    const protectedSpans = el.querySelectorAll(".fmtEmoji[data-ba-emoji-protect='1']");
+    if (!protectedSpans.length) return;
+    for (const span of protectedSpans) span.replaceWith(document.createTextNode(span.textContent || ""));
+    el.normalize();
+    return;
+  }
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const value = node.nodeValue || "";
+      if (!value || node.parentElement?.closest(".fmtEmoji")) return NodeFilter.FILTER_REJECT;
+      EMOJI_DOM_RE.lastIndex = 0;
+      return EMOJI_DOM_RE.test(value) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const text = node.nodeValue || "";
+    const fragment = document.createDocumentFragment();
+    let last = 0;
+    EMOJI_DOM_RE.lastIndex = 0;
+    for (const match of text.matchAll(EMOJI_DOM_RE)) {
+      const index = match.index ?? 0;
+      if (index > last) fragment.append(text.slice(last, index));
+      const span = document.createElement("span");
+      span.className = "fmtEmoji";
+      span.dataset.baEmojiProtect = "1";
+      span.textContent = match[0];
+      fragment.append(span);
+      last = index + match[0].length;
+    }
+    if (last < text.length) fragment.append(text.slice(last));
+    node.replaceWith(fragment);
+  }
+}
+
 function applyLineClasses(el, prefix, vis, row) {
   if (!el) return;
+  protectRainbowEmojis(el, !!vis?.rainbow);
   const classes = [
     `${prefix}`,
     `${prefix}-color`,
@@ -4587,7 +4674,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.9";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.10";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4604,7 +4691,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.9"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.10"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
@@ -4721,12 +4808,26 @@ function observePage() {
 
 async function init() {
   let storedSettings = {};
+  let hadStoredSettings = false;
   try {
     const stored = await api.storage.local.get(STORAGE_KEY);
     storedSettings = stored?.[STORAGE_KEY] || {};
+    hadStoredSettings = !!stored?.[STORAGE_KEY] && Object.keys(storedSettings).length > 0;
     state.settings = normalizeSettings(storedSettings);
   } catch {
     state.settings = normalizeSettings({});
+  }
+  if (!hadStoredSettings) {
+    const backup = readSettingsBackup();
+    if (backup) {
+      storedSettings = backup;
+      state.settings = normalizeSettings(backup);
+      try {
+        await api.storage.local.set({ [STORAGE_KEY]: state.settings });
+      } catch {}
+    }
+  } else {
+    writeSettingsBackup(state.settings);
   }
   state.settingsEpoch = 1;
   state.activeTab = state.settings.ui.activeTab || "studio";
@@ -4737,6 +4838,7 @@ async function init() {
     if (area !== "local") return;
     const change = changes[STORAGE_KEY];
     if (!change) return;
+    if (change.newValue && typeof change.newValue === "object") writeSettingsBackup(change.newValue);
     const before = change.oldValue?.enabled !== false;
     const after = change.newValue?.enabled !== false;
     if (before === after) return;

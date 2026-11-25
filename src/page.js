@@ -192,7 +192,7 @@ import {
       state.token = data.token || state.token;
       setConfig(parseSettingsPayload(data.payload?.settings));
       publishStatus();
-      post("ready", { version: "1.1.9" });
+      post("ready", { version: "1.1.10" });
       if (state.active) start();
       return;
     }

@@ -2,6 +2,22 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.10 — Rainbow, stars, and client labels
+
+- Fixed flair-coloured `&g` rainbow text falling back to white.
+- Reversed rainbow motion to run left-to-right.
+- Added darker text contrast behind flair-coloured rainbows.
+- Kept emoji glyphs untouched by rainbow and colour effects.
+- Extended the stars flair field across the full message row.
+- Added 1–3 randomized shooting stars at different positions per trigger.
+- Reapplied the BA plaque on every chat refresh so it no longer disappears after a re-render.
+- Added spoofed-client labels in chat, including **BA · client** for known Better Agnostr users.
+- Reused known Better Agnostr peers for chat badges, matching the profile badge.
+- Combined Firefox and Chromium downloads into one release entry.
+- Mirrored settings to a local agnostr.com backup and restored them after extension storage loss or an extension-ID change.
+- Added a stable Chromium manifest key so unpacked updates keep the same extension ID.
+- Compressed the README without changing the warning blocks.
+
 ## 1.1.9 — Chimes, line effects, and custom actions
 
 - Kept Agnostr's native notifications, ringtone, vibration, and lock-screen controls.

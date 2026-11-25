@@ -1,9 +1,7 @@
-name: Chromium pre-release
+name: Chromium stand-alone pre-release (manual)
 
 on:
-  push:
-    tags:
-      - "v*-chromium.*"
+  workflow_dispatch:
 
 permissions:
   contents: write

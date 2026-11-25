@@ -209,6 +209,38 @@ export function escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
+const EMOJI_RE = /(?:[\u{1F1E6}-\u{1F1FF}]{2}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:\uFE0F|\u20E3|[\u{1F3FB}-\u{1F3FF}])?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|[\u{1F3FB}-\u{1F3FF}])?)*)/gu;
+
+function emojiHtml(text) {
+  const source = String(text ?? "");
+  let html = "";
+  let last = 0;
+  EMOJI_RE.lastIndex = 0;
+  for (const match of source.matchAll(EMOJI_RE)) {
+    const index = match.index ?? 0;
+    if (index > last) html += escapeHtml(source.slice(last, index));
+    html += `<span class="fmtEmoji">${escapeHtml(match[0])}</span>`;
+    last = index + match[0].length;
+  }
+  if (last < source.length) html += escapeHtml(source.slice(last));
+  return html || escapeHtml(source);
+}
+
+function richText(raw) {
+  const source = String(raw ?? "");
+  let html = "";
+  let last = 0;
+  EMOJI_RE.lastIndex = 0;
+  for (const match of source.matchAll(EMOJI_RE)) {
+    const index = match.index ?? 0;
+    if (index > last) html += linkify(escapeHtml(source.slice(last, index)));
+    html += `<span class="fmtEmoji">${escapeHtml(match[0])}</span>`;
+    last = index + match[0].length;
+  }
+  if (last < source.length) html += linkify(escapeHtml(source.slice(last)));
+  return html;
+}
+
 function linkify(text) {
   // text is already HTML-escaped. Only touch obvious http(s) URLs.
   return text.replace(/(https?:\/\/[^\s<]+)/g, (url) => {
@@ -222,7 +254,7 @@ function linkify(text) {
  * Turn raw &-coded text into safe HTML.
  * bodyFn receives already-escaped plaintext and must return safe HTML.
  */
-export function renderFormatHtml(raw, { bodyFn = linkify } = {}) {
+export function renderFormatHtml(raw, { bodyFn = richText } = {}) {
   let state = { ...BLANK };
   let html = "";
   for (const tok of tokenize(raw)) {
@@ -259,8 +291,8 @@ export function renderLineHtml(template, { name = "you", tag = "#a1b2", msgHtml 
   if (!tpl) return msgHtml;
   const cleanTag = `#${String(tag).replace(/^#/, "")}`;
   const safeParts = {
-    "{name}": escapeHtml(name),
-    "{tag}": `<span class="ba-line-tag">${escapeHtml(cleanTag)}</span>`,
+    "{name}": emojiHtml(name),
+    "{tag}": `<span class="ba-line-tag">${emojiHtml(cleanTag)}</span>`,
     "{msg}": msgHtml,
   };
   const plainParts = { "{name}": name, "{tag}": cleanTag, "{msg}": msgText || "hello" };

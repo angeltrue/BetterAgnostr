@@ -1544,8 +1544,8 @@ export function flairVars(raw) {
 	if (n !== "stars") return {};
 	return {
 		// two independent fields: a denser one up top, a sparser one lower down
-		"--star-a-field": particleField(7, 46, 11, STAR_TINTS),
-		"--star-b-field": particleField(5, 60, 12, STAR_TINTS),
+		"--star-a-field": particleField(28, 52, 11, STAR_TINTS),
+		"--star-b-field": particleField(20, 68, 12, STAR_TINTS),
 		"--star-a-left": `${Math.round(rnd(4, 28))}px`,
 		"--star-a-top": `${Math.round(rnd(16, 40))}%`,
 		"--star-b-left": `${Math.round(rnd(12, 46))}px`,
