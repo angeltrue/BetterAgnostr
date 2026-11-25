@@ -54,6 +54,22 @@
 	text-shadow: var(--ba-rainbow-shadow-flair, none);
 }
 
+/* If React strips the fmtRainbow class while re-rendering a selected row, the
+   line-rainbow data attribute usually survives. Keep the gradient visible from
+   that attribute until the row is repaired, so selection never flashes plain text. */
+.ag-msg-author[data-ba-line-rainbow="1"]:not(.fmtRainbow),
+.ag-msg-rich[data-ba-line-rainbow="1"]:not(.fmtRainbow) {
+	background-image: var(--ba-rainbow-flair, var(--ba-rainbow-generic));
+	background-size: 200% 100%;
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	color: transparent;
+	animation: fmtRainbow 6s linear infinite;
+	text-shadow: var(--ba-rainbow-shadow-flair, none);
+	text-decoration-color: #ff90b0;
+}
+
 /* Bright rainbow mode. */
 html[data-ba-rainbow="bright"],
 :host([data-ba-rainbow="bright"]) {
@@ -916,38 +932,43 @@ html.retro .flairScan {
 	top: calc(var(--son-y, 50%) - var(--son-reach, 170px) / 2);
 	width: var(--son-reach, 170px);
 	height: var(--son-reach, 170px);
-	border-radius: 50%;
-	border: 2px solid rgba(125, 255, 194, 0.95);
 	opacity: 0;
-	/* Chromium mis-rasterizes a box-shadow on a border-radius element while it is
-	   being scaled: on some frames the shadow shows up as a large thin cross through
-	   the middle of the ring. The glow is painted as a gradient pseudo-element
-	   instead, and the ring itself is promoted to its own layer so the 2px border
-	   and its radius rasterize together. */
-	will-change: transform;
-	
+	pointer-events: none;
+	/* The wavefront is drawn as vector circles and animated through their radius,
+	   not as a border on a transform-scaled box. Scaling a rounded 2px border is
+	   what produced the thin cross through the middle of the rings on some frames;
+	   animating r keeps every frame a clean circle in both engines. */
 	animation: flairSonarPing var(--son-ping, 10s) linear
 		calc(var(--son-phase, 0s) - var(--son-ping, 10s) * var(--r-i, 0) * var(--son-gap, 0.09)) infinite;
 }
 
-.flair-sonar .ping::before {
-	content: "";
-	position: absolute;
-	inset: -6px;
-	border-radius: 50%;
-	background: radial-gradient(
-		circle closest-side,
-		transparent 0%,
-		rgba(46, 255, 160, 0.08) 80%,
-		rgba(46, 255, 160, 0.26) 92%,
-		transparent 100%
-	);
-	pointer-events: none;
+.flair-sonar .ping svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
+
+.flair-sonar .ping circle {
+	fill: none;
+	animation: flairSonarRing var(--son-ping, 10s) linear
+		calc(var(--son-phase, 0s) - var(--son-ping, 10s) * var(--r-i, 0) * var(--son-gap, 0.09)) infinite;
+}
+
+.flair-sonar .pingCore {
+	stroke: rgba(125, 255, 194, 0.95);
+	--son-stroke-min: 0.1;
+	--son-stroke-max: 0.9;
+}
+
+.flair-sonar .pingHalo {
+	stroke: rgba(46, 255, 160, 0.24);
+	--son-stroke-min: 0.5;
+	--son-stroke-max: 3.2;
 }
 
 @keyframes flairSonarPing {
 	0% {
-		transform: scale(0.1);
 		opacity: 0;
 	}
 	4% {
@@ -959,13 +980,21 @@ html.retro .flairScan {
 	31% {
 		opacity: calc(var(--son-lit, 0.9) * 0.14);
 	}
-	45% {
-		transform: scale(1);
+	45%,
+	100% {
 		opacity: 0;
 	}
+}
+
+@keyframes flairSonarRing {
+	0% {
+		r: 5px;
+		stroke-width: var(--son-stroke-min, 0.1);
+	}
+	45%,
 	100% {
-		transform: scale(1);
-		opacity: 0;
+		r: 50px;
+		stroke-width: var(--son-stroke-max, 0.9);
 	}
 }
 

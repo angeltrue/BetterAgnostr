@@ -51,6 +51,9 @@ export const DEFAULT_SETTINGS = {
     preset: "agnostr",
     customCss: "",
   },
+  appearance: {
+    hideNotificationButton: false,
+  },
   sounds: {
     message: "macintosh",
     click: "model-m",
@@ -180,9 +183,11 @@ export function normalizeSettings(raw) {
   s.glub.buildFetchedAt = Number.isFinite(s.glub.buildFetchedAt) ? s.glub.buildFetchedAt : 0;
   s.glub.autoSync = s.glub.autoSync !== false;
 
-  // theme
+  // theme / appearance
   if (!PRESET_IDS.has(s.theme.preset)) s.theme.preset = "agnostr";
   s.theme.customCss = String(s.theme.customCss || "").slice(0, 40000);
+  if (!s.appearance || typeof s.appearance !== "object") s.appearance = {};
+  s.appearance.hideNotificationButton = s.appearance.hideNotificationButton === true;
 
   // sounds
   s.sounds.message = MESSAGE_IDS.has(s.sounds.message) ? s.sounds.message : "macintosh";

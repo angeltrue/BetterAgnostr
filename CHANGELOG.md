@@ -2,6 +2,18 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.2.0 — Sonar rings, rainbow selection, client plaques, Alerts
+
+- Rebuilt sonar wavefronts as SVG circles animated by radius, removing the clipped-border cross while keeping the CRT scanlines.
+- Repaired BA row formatting synchronously when React rewrites a selected row, eliminating the rainbow flash on select/deselect.
+- Kept line-rainbow gradients visible from their data attribute during the repair gap.
+- Fixed false BA plaques for users whose current event comes from another client.
+- Integrated Better Agnostr sound settings into the new Alerts shortcut's Notifications sheet.
+- Added **Appearance → Hide notification button** to remove the Alerts shortcut from the rail and mobile tab bar.
+- Compressed README and rewrote both warnings.
+- Left aurora unchanged.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.1.15 — Sonar rings, exact Glub rainbow, Appearance toggle
 
 - Restored the sonar CRT scanline glass.

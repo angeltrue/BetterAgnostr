@@ -630,7 +630,9 @@ const SONAR_RINGS = 3;
 
 export function sonarPingMarkup() {
 	let html = "";
-	for (let i = 0; i < SONAR_RINGS; i++) html += `<span class="ping" style="--r-i:${i}"></span>`;
+	for (let i = 0; i < SONAR_RINGS; i++) {
+		html += `<span class="ping" style="--r-i:${i}" aria-hidden="true"><svg viewBox="0 0 100 100" focusable="false" aria-hidden="true"><circle class="pingHalo" cx="50" cy="50" r="5"></circle><circle class="pingCore" cx="50" cy="50" r="5"></circle></svg></span>`;
+	}
 	return html;
 }
 

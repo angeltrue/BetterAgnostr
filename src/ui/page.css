@@ -1415,3 +1415,7 @@ html.ba-hide-timestamps .ag-msg-row .ag-msg-time,
 html.ba-hide-timestamps .ag-msg-row .ag-msg-gutter-time {
   display: none !important;
 }
+
+html.ba-hide-notification-button .ag-notification-shortcut {
+  display: none !important;
+}
