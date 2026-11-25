@@ -59,7 +59,7 @@ This branch is the Chromium port. The Firefox build remains on `main`.
 4. Click **Load unpacked** and select `dist/`.
 5. Open or reload <https://agnostr.com/>.
 
-The unpacked build is `release/better-agnostr-1.1.10-chromium.zip`. Chromium 148 or newer is required. The manifest uses a stable key, so replacing the unpacked folder keeps the same extension ID and preserves extension storage.
+The unpacked build is `release/better-agnostr-1.1.11-chromium.zip`. Chromium 148 or newer is required. The manifest uses a stable key, so replacing the unpacked folder keeps the same extension ID and preserves extension storage.
 
 ### Development launch
 
@@ -143,7 +143,7 @@ The toolbar popup's **Enable Better Agnostr** switch reloads every open Agnostr 
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.10-chromium.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.11-chromium.zip
 ```
 
 Source layout:

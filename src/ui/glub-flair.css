@@ -1,21 +1,23 @@
 .fmtRainbow {
 	background-image: repeating-linear-gradient(
 		270deg,
-		#ff5555 0%,
-		#ffcc00 8%,
-		#55ff55 16%,
-		#55ffff 24%,
-		#5b8dff 32%,
-		#c74ddb 40%,
-		#ff5555 48%
+		#ff6b6b 0%,
+		#ffd93d 8%,
+		#6bff8f 16%,
+		#6bffff 24%,
+		#7aa2ff 32%,
+		#e879f9 40%,
+		#ff6b6b 48%
 	);
 	background-size: 200% 100%;
+	background-color: rgba(255, 255, 255, 0.26);
+	background-blend-mode: screen;
 	-webkit-background-clip: text;
 	background-clip: text;
 	-webkit-text-fill-color: transparent;
 	color: transparent;
 	animation: fmtRainbow 6s linear infinite;
-	
+	text-shadow: 0 0 7px rgba(255, 255, 255, 0.5), 0 1px 1px rgba(0, 0, 0, 0.42);
 	text-decoration-color: #ff8fb0;
 }
 @keyframes fmtRainbow {
@@ -38,7 +40,7 @@
 		#c74ddb 40%,
 		#ff5555 48%
 	);
-	text-shadow: 0 1px 1px rgba(0, 0, 0, 0.68), 0 0 7px rgba(0, 0, 0, 0.32);
+	text-shadow: 0 0 8px rgba(255, 255, 255, 0.56), 0 1px 1px rgba(0, 0, 0, 0.46);
 }
 
 .fmtEmoji {

@@ -1419,7 +1419,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.10";
+  const version = manifest.version || "1.1.11";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1754,7 +1754,7 @@ function injectAppearanceExtras(modal) {
   }
 }
 
-function shootStar(el) {
+function shootStar(el, delay = 0) {
   if (typeof el.animate !== "function") return;
   const layer = el.parentElement;
   const row = layer?.closest(".ag-msg-row") || layer;
@@ -1766,33 +1766,34 @@ function shootStar(el) {
   const offsetY = Math.max(0, lineRect.top - rowRect.top);
   const w = Math.max(60, rowRect.width - offsetX - 4);
   const h = Math.max(12, lineRect.height);
-  const count = 1 + ((Math.random() * 2.4) | 0);
-  for (let i = 0; i < count; i++) {
-    const star = document.createElement("span");
-    star.className = "ba-shooting-star";
-    star.setAttribute("aria-hidden", "true");
-    const length = 30 + Math.random() * 42;
-    star.style.width = `${length.toFixed(1)}px`;
-    layer.appendChild(star);
-    const startX = offsetX + 4 + Math.random() * Math.max(1, w * 0.72);
-    const startY = offsetY + 3 + Math.random() * Math.max(1, h - 6);
-    const travel = Math.max(50, Math.min(w - (startX - offsetX) - 8, 90 + Math.random() * 300));
-    const angle = 6 + Math.random() * 12;
-    const endX = startX + travel;
-    const endY = Math.min(offsetY + h - 2, startY + travel * Math.tan((angle * Math.PI) / 180) * 0.32);
-    const rotation = `rotate(${angle.toFixed(1)}deg)`;
-    const anim = star.animate(
-      [
-        { transform: `translate3d(${startX.toFixed(1)}px, ${startY.toFixed(1)}px, 0) ${rotation}`, opacity: 0 },
-        { opacity: 0.95, offset: 0.18 },
-        { opacity: 0.85, offset: 0.72 },
-        { transform: `translate3d(${endX.toFixed(1)}px, ${endY.toFixed(1)}px, 0) ${rotation}`, opacity: 0 },
-      ],
-      { duration: 430 + Math.random() * 420, easing: "cubic-bezier(.2,.65,.3,1)" },
-    );
-    anim.onfinish = () => star.remove();
-    anim.oncancel = () => star.remove();
-  }
+  const star = document.createElement("span");
+  star.className = "ba-shooting-star";
+  star.setAttribute("aria-hidden", "true");
+  star.style.width = `${(28 + Math.random() * 46).toFixed(1)}px`;
+  layer.appendChild(star);
+  const startX = offsetX + 4 + Math.random() * Math.max(1, w * 0.86);
+  const startY = offsetY + 3 + Math.random() * Math.max(1, h - 6);
+  const travel = Math.max(50, Math.min(w - (startX - offsetX) - 8, 70 + Math.random() * 300));
+  const angle = 5 + Math.random() * 14;
+  const endX = startX + travel;
+  const endY = Math.min(offsetY + h - 2, startY + travel * Math.tan((angle * Math.PI) / 180) * 0.34);
+  const rotation = `rotate(${angle.toFixed(1)}deg)`;
+  const anim = star.animate(
+    [
+      { transform: `translate3d(${startX.toFixed(1)}px, ${startY.toFixed(1)}px, 0) ${rotation}`, opacity: 0 },
+      { opacity: 0.98, offset: 0.16 },
+      { opacity: 0.9, offset: 0.7 },
+      { transform: `translate3d(${endX.toFixed(1)}px, ${endY.toFixed(1)}px, 0) ${rotation}`, opacity: 0 },
+    ],
+    {
+      duration: 400 + Math.random() * 480,
+      delay,
+      easing: "cubic-bezier(.2,.65,.3,1)",
+      fill: "both",
+    },
+  );
+  anim.onfinish = () => star.remove();
+  anim.oncancel = () => star.remove();
 }
 
 function visibleFxTargets(selector) {
@@ -1801,7 +1802,9 @@ function visibleFxTargets(selector) {
     const row = el.parentElement;
     if (!row || row.classList.contains("flairQuiet")) continue;
     const rect = row.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) out.push(el);
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+    out.push(el);
   }
   return out;
 }
@@ -1881,7 +1884,20 @@ function flairTickerTick() {
   if (document.hidden || state.settings.studio.reduceMotion || state.settings.studio.renderInAgnostr === false) return;
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
   const stars = visibleFxTargets(".flair-stars > .flairFx");
-  if (stars.length && Math.random() < 0.18) shootStar(stars[Math.floor(Math.random() * stars.length)]);
+  if (stars.length && Math.random() < 0.34) {
+    const count = Math.min(stars.length, 1 + Math.floor(Math.random() * 3));
+    const used = new Set();
+    for (let i = 0; i < count; i++) {
+      let index = Math.floor(Math.random() * stars.length);
+      let guard = 0;
+      while (used.has(index) && guard < stars.length) {
+        index = (index + 1) % stars.length;
+        guard += 1;
+      }
+      used.add(index);
+      shootStar(stars[index], Math.random() * 1600);
+    }
+  }
   rollFxTargets(".flair-lightning > .flairFx", 0.13, flairStrike, 3);
   rollFxTargets(".flair-bitcoin > .flairFx", 0.3, circuitSurge, 4);
 }
@@ -4674,7 +4690,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.10";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.11";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4691,7 +4707,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.10"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.11"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
