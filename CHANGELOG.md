@@ -2,6 +2,22 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.9 — Chimes, line effects, and custom actions
+
+- Kept Agnostr's native notifications, ringtone, vibration, and lock-screen controls.
+- Replaced only Agnostr's native message chime with Better Agnostr's procedural chimes and UI clicks.
+- Styled the Better Agnostr sound controls with Agnostr's native section, row, switch, select, and button styling.
+- Restored Agnostr's native message chime when Better Agnostr is paused.
+- Fixed obfuscation formatting for usernames in line templates.
+- Fixed colour and rainbow line effects overriding emoji rendering.
+- Removed the **General** tab from Better Agnostr settings.
+- Removed the obsolete Better Agnostr shortcut-visibility setting.
+- Moved custom-action text out of settings and into the custom-action dialog.
+- Custom actions no longer append a username automatically.
+- Added `{sender}` and `{user}` placeholders with paste buttons in the custom-action dialog.
+- Added `/me <text>` composer command support for custom actions.
+- Removed the "X blocked message(s)" run notices from chats while Better Agnostr is active.
+
 ## 1.1.8 — Toolbar cleanup and master switch
 
 - Removed the Agnostr Suite buttons that Better Agnostr injected into workspace headers; the native app rail is now the single suite entry.

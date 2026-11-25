@@ -35,6 +35,44 @@ import {
 } from "./lib/settings.js";
 
 const api = globalThis.browser ?? globalThis.chrome;
+const NATIVE_NOTIFICATIONS_KEY = "agnostr:v2:notifications";
+const NATIVE_NOTIFICATIONS_BACKUP = "betterAgnostr.nativeNotifications.v1";
+
+function overrideNativeNotifications() {
+  try {
+    const raw = localStorage.getItem(NATIVE_NOTIFICATIONS_KEY);
+    if (localStorage.getItem(NATIVE_NOTIFICATIONS_BACKUP) === null) {
+      localStorage.setItem(
+        NATIVE_NOTIFICATIONS_BACKUP,
+        JSON.stringify({ present: raw !== null, value: raw || "" }),
+      );
+    }
+    let current = {};
+    try {
+      current = raw ? JSON.parse(raw) : {};
+    } catch {
+      current = {};
+    }
+    localStorage.setItem(
+      NATIVE_NOTIFICATIONS_KEY,
+      JSON.stringify({
+        ...(current && typeof current === "object" ? current : {}),
+        soundEnabled: false,
+      }),
+    );
+  } catch {}
+}
+
+function restoreNativeNotifications() {
+  try {
+    const backup = localStorage.getItem(NATIVE_NOTIFICATIONS_BACKUP);
+    if (backup === null) return;
+    const saved = JSON.parse(backup);
+    if (saved?.present) localStorage.setItem(NATIVE_NOTIFICATIONS_KEY, String(saved.value || ""));
+    else localStorage.removeItem(NATIVE_NOTIFICATIONS_KEY);
+    localStorage.removeItem(NATIVE_NOTIFICATIONS_BACKUP);
+  } catch {}
+}
 
 const FONT_PRESETS = [
   { id: "default", label: "Agnostr default" },
@@ -599,7 +637,7 @@ function appendLogs(logs) {
       state.ownEventIds.add(log.eventId);
       if (!internalKinds.has(log.kind)) state.lastOutgoingId = log.eventId;
     }
-    if (log.dir === "in" && log.event) maybeChime(log.event);
+    if (log.dir === "in" && log.event) handleIncomingAlert(log.event);
   }
   state.logs.push(...logs);
   if (state.logs.length > 300) state.logs.splice(0, state.logs.length - 300);
@@ -629,25 +667,31 @@ function isMentionEvent(event) {
   return false;
 }
 
-function maybeChime(event) {
-  const sounds = state.settings.sounds;
-  if (!sounds.messageEnabled || sounds.message === "off") return;
-  if (!event) return;
-  const kind = event.kind;
-  const events = sounds.events || {};
-  const isChat = kind === 20000 || kind === 23333;
-  const isDm = kind === 4 || kind === 14 || kind === 1059;
-  const isCall = kind === 25050;
-  if (isChat) {
-    if (!events.chat) return;
-    if (events.mentionOnly && !isMentionEvent(event)) return;
-  } else if (isDm) {
-    if (!events.dm) return;
-  } else if (isCall) {
-    if (!events.calls || state.settings.privacy.calls.disable) return;
-  } else {
-    return;
+function alertKind(event) {
+  const kind = Number(event?.kind);
+  if (kind === 20000 || kind === 23333) return isMentionEvent(event) ? "mention" : "chat";
+  if (kind === 4 || kind === 14 || kind === 1059) return "dm";
+  if (kind === 25050) return "call";
+  return "";
+}
+
+function alertAllowed(kind, events) {
+  if (kind === "dm") return events.dm !== false;
+  if (kind === "call") return events.calls === true && !state.settings.privacy.calls.disable;
+  if (kind === "chat" || kind === "mention") {
+    if (events.chat === false) return false;
+    if (events.mentionOnly && kind !== "mention") return false;
+    return true;
   }
+  return false;
+}
+
+function handleIncomingAlert(event) {
+  if (!event) return;
+  const kind = alertKind(event);
+  if (!kind) return;
+  const events = state.settings.sounds.events || {};
+  if (!alertAllowed(kind, events)) return;
   if (state.seenChimeIds.has(event.id) || state.ownEventIds.has(event.id)) return;
   const age = Math.floor(Date.now() / 1000) - Number(event.created_at || 0);
   if (!Number.isFinite(age) || age < -10 || age > 15) return;
@@ -660,7 +704,10 @@ function maybeChime(event) {
     const first = state.seenChimeIds.values().next().value;
     if (first) state.seenChimeIds.delete(first);
   }
-  playMessageSound(sounds.message, sounds.volume);
+  const sounds = state.settings.sounds;
+  if (sounds.messageEnabled && sounds.message !== "off") {
+    playMessageSound(sounds.message, sounds.volume);
+  }
 }
 
 function renderRelaySoon() {
@@ -1012,7 +1059,6 @@ function betterSettingsPaneHtml() {
   const tabs = [
     ["line", "Line"],
     ["client", "Client"],
-    ["general", "General"],
   ];
   return `<div class="ba-settings-shell" data-ba-better-pane="1">
     <div class="ba-set-tabs" role="tablist" aria-label="Better Agnostr sections">
@@ -1098,24 +1144,11 @@ function betterClientHtml() {
     </div>`;
 }
 
-function betterGeneralHtml() {
-  return `
-    <div class="ag-set-group">
-      ${baToggle("ui.showButton", "Show Better Agnostr shortcut", "Adds Better Agnostr to the Agnostr Suite")}
-    </div>
-    <div class="ag-set-group">
-      <span class="ag-set-label">Custom action</span>
-      <input class="ag-input" data-ba-setting="actions.custom" maxlength="60" value="${h(state.settings.actions.custom)}" placeholder="boops">
-    </div>
-`;
-}
-
 function renderBetterTabContent(modal) {
   const content = modal.querySelector("[data-ba-better-content]");
   if (!content) return;
-  if (state.betterTab === "line") content.innerHTML = betterLineHtml();
-  else if (state.betterTab === "client") content.innerHTML = betterClientHtml();
-  else content.innerHTML = betterGeneralHtml();
+  if (state.betterTab === "client") content.innerHTML = betterClientHtml();
+  else content.innerHTML = betterLineHtml();
   for (const tab of modal.querySelectorAll("[data-ba-better-tab]")) {
     tab.classList.toggle("is-active", tab.getAttribute("data-ba-better-tab") === state.betterTab);
   }
@@ -1362,7 +1395,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.8";
+  const version = manifest.version || "1.1.9";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1546,28 +1579,6 @@ function nativePrivacyHtml() {
   </div>`;
 }
 
-function nativeSoundsHtml() {
-  const sounds = state.settings.sounds;
-  const events = sounds.events || {};
-  return `<div class="ag-set-group ba-native-group" data-ba-native="sounds">
-    <span class="ag-set-label">Better Agnostr sounds</span>
-    <div class="ba-set-field"><span>Message chime</span><select class="ag-input ba-set-select" data-ba-setting="sounds.message">${optionsHtml(MESSAGE_SOUNDS, sounds.message)}</select></div>
-    <div class="ba-set-field"><span>UI click</span><select class="ag-input ba-set-select" data-ba-setting="sounds.click">${optionsHtml(CLICK_SOUNDS, sounds.click)}</select></div>
-    <div class="ba-set-field"><span>Volume</span><input class="ba-set-range" type="range" min="0" max="1" step="0.05" data-ba-setting="sounds.volume" value="${h(String(sounds.volume))}"></div>
-    <div class="ba-native-checks">
-      <label class="ba-native-check"><input type="checkbox" data-ba-setting="sounds.events.chat"${events.chat ? " checked" : ""}><span>Chat</span></label>
-      <label class="ba-native-check"><input type="checkbox" data-ba-setting="sounds.events.mentionOnly"${events.mentionOnly ? " checked" : ""}><span>Mentions only</span></label>
-      <label class="ba-native-check"><input type="checkbox" data-ba-setting="sounds.events.dm"${events.dm ? " checked" : ""}><span>DMs</span></label>
-      <label class="ba-native-check"><input type="checkbox" data-ba-setting="sounds.events.calls"${events.calls ? " checked" : ""}><span>Call invites</span></label>
-      <label class="ba-native-check"><input type="checkbox" data-ba-setting="sounds.clickEnabled"${sounds.clickEnabled ? " checked" : ""}><span>UI clicks</span></label>
-    </div>
-    <div class="ba-native-actions">
-      <button type="button" class="ag-btn ag-btn-secondary ag-btn-sm" data-ba-settings-action="preview-message-sound">Test chime</button>
-      <button type="button" class="ag-btn ag-btn-secondary ag-btn-sm" data-ba-settings-action="preview-click-sound">Test click</button>
-    </div>
-  </div>`;
-}
-
 function injectNativePrivacy(modal) {
   const stack = modal.querySelector(".ag-set-pane-stack");
   if (!stack || stack.querySelector("[data-ba-native='privacy']")) return;
@@ -1586,37 +1597,98 @@ function injectNativePrivacy(modal) {
   }
 }
 
+function soundsSectionHtml() {
+  const sounds = state.settings.sounds;
+  const events = sounds.events || {};
+  const toggleRow = (title, desc, path, checked) => `
+    <label class="ag-set-notif-row">
+      <div class="ag-set-notif-row-copy">
+        <span class="ag-set-notif-row-title">${h(title)}</span>
+        <span class="ag-set-notif-row-desc">${h(desc)}</span>
+      </div>
+      <input class="ag-switch" type="checkbox" data-ba-setting="${h(path)}"${checked ? " checked" : ""}>
+    </label>`;
+  const selectRow = (title, desc, path, list, value) => `
+    <div class="ag-set-notif-row">
+      <div class="ag-set-notif-row-copy">
+        <span class="ag-set-notif-row-title">${h(title)}</span>
+        <span class="ag-set-notif-row-desc">${h(desc)}</span>
+      </div>
+      <select class="ag-input ba-set-select ba-notif-select" data-ba-setting="${h(path)}">${optionsHtml(list, value)}</select>
+    </div>`;
+  const rangeRow = (title, desc, path, value) => `
+    <div class="ag-set-notif-row">
+      <div class="ag-set-notif-row-copy">
+        <span class="ag-set-notif-row-title">${h(title)}</span>
+        <span class="ag-set-notif-row-desc">${h(desc)}</span>
+      </div>
+      <input class="ba-set-range ba-notif-range" type="range" min="0" max="1" step="0.05" data-ba-setting="${h(path)}" value="${h(String(value))}">
+    </div>`;
+  return `<section class="ag-set-section" data-ba-native="sounds">
+      <div class="ag-set-section-head">
+        <div class="ag-set-section-copy">
+          <div class="ag-set-section-title-row"><h3 class="ag-set-section-title">Better Agnostr sounds</h3></div>
+          <p class="ag-set-section-desc">These chimes and UI clicks replace Agnostr's native message chime. Agnostr notifications, ringtone, vibration, and lock-screen previews above remain in control.</p>
+        </div>
+      </div>
+      <div class="ag-set-card-list">
+        ${toggleRow("Message chimes", "Play the selected chime for new alerts", "sounds.messageEnabled", sounds.messageEnabled !== false)}
+        ${selectRow("Message chime", "Sound for new messages", "sounds.message", MESSAGE_SOUNDS, sounds.message)}
+        ${rangeRow("Volume", "Chime and interface-click volume", "sounds.volume", sounds.volume)}
+        ${toggleRow("UI clicks", "Play a sound for buttons and controls", "sounds.clickEnabled", sounds.clickEnabled !== false)}
+        ${selectRow("UI click", "Sound for interface clicks", "sounds.click", CLICK_SOUNDS, sounds.click)}
+      </div>
+      <div class="ba-native-actions">
+        <button type="button" class="ag-btn ag-btn-secondary ag-btn-sm" data-ba-settings-action="preview-message-sound">Test chime</button>
+        <button type="button" class="ag-btn ag-btn-secondary ag-btn-sm" data-ba-settings-action="preview-click-sound">Test click</button>
+      </div>
+    </section>
+    <section class="ag-set-section" data-ba-native="chime-triggers">
+      <div class="ag-set-section-head">
+        <div class="ag-set-section-copy">
+          <div class="ag-set-section-title-row"><h3 class="ag-set-section-title">Chime triggers</h3></div>
+          <p class="ag-set-section-desc">Choose which incoming activity plays a Better Agnostr sound.</p>
+        </div>
+      </div>
+      <div class="ag-set-card-list">
+        ${toggleRow("Direct messages", "Encrypted one-to-one chats", "sounds.events.dm", events.dm !== false)}
+        ${toggleRow("Chat & rooms", "Bitchat and group channel messages", "sounds.events.chat", events.chat !== false)}
+        ${toggleRow("Mentions only", "Limit chat sounds to @mentions and direct replies", "sounds.events.mentionOnly", events.mentionOnly === true)}
+        ${toggleRow("Call invites", "Incoming call signals", "sounds.events.calls", events.calls === true)}
+      </div>
+    </section>`;
+}
+
 function injectNativeSounds(modal) {
   const stack = modal.querySelector(".ag-set-pane-stack");
   if (!stack) return;
-  const row = [...modal.querySelectorAll(".ag-set-notif-row, .ag-set-toggle-card")].find((el) => {
-    const title = el.querySelector(".ag-set-notif-row-title, .ag-set-toggle-title")?.textContent?.trim();
-    return title === "Message chimes";
-  });
-  const nativeInput = row?.querySelector("input[type=checkbox]");
-  if (nativeInput instanceof HTMLInputElement) {
-    if (state.settings.sounds.messageEnabled !== nativeInput.checked) {
-      state.settings.sounds.messageEnabled = nativeInput.checked;
-      debounceSave();
-    }
-    if (!nativeInput.dataset.baBound) {
-      nativeInput.dataset.baBound = "1";
-      nativeInput.addEventListener("change", () => {
-        state.settings.sounds.messageEnabled = nativeInput.checked;
-        debounceSave();
-      });
-    }
+  const nativeChime = [...modal.querySelectorAll(".ag-set-notif-row")].find(
+    (el) => el.querySelector(".ag-set-notif-row-title")?.textContent?.trim() === "Message Chimes",
+  );
+  if (nativeChime) {
+    nativeChime.style.display = "none";
+    nativeChime.setAttribute("data-ba-hidden-native-chime", "1");
   }
   if (stack.querySelector("[data-ba-native='sounds']")) return;
-  const holder = document.createElement("div");
-  holder.innerHTML = nativeSoundsHtml();
-  const group = holder.firstElementChild;
-  const soundGroup = [...stack.querySelectorAll(".ag-set-group")].find((g) =>
-    g.querySelector(".ag-set-label")?.textContent?.includes("Sound, Ringtone"),
+  const anchor = [...stack.querySelectorAll("section.ag-set-section")].find(
+    (el) => el.querySelector(".ag-set-section-title")?.textContent?.trim() === "Sounds & Lock Screen",
   );
-  if (soundGroup) soundGroup.after(group);
-  else stack.appendChild(group);
-  syncNativeChimeState();
+  const holder = document.createElement("div");
+  holder.innerHTML = soundsSectionHtml();
+  const nodes = [...holder.children];
+  if (anchor) anchor.after(...nodes);
+  else stack.append(...nodes);
+}
+
+function clearNativeSoundsOverride(modal) {
+  const stack = modal.querySelector(".ag-set-pane-stack");
+  if (!stack) return;
+  for (const el of stack.querySelectorAll("[data-ba-native='sounds'], [data-ba-native='chime-triggers']")) el.remove();
+  for (const el of stack.querySelectorAll("[data-ba-hidden-native-chime]")) {
+    if (!(el instanceof HTMLElement)) continue;
+    el.style.removeProperty("display");
+    el.removeAttribute("data-ba-hidden-native-chime");
+  }
 }
 
 function injectAppearanceExtras(modal) {
@@ -1774,24 +1846,7 @@ function flairStrike(el) {
   anim.oncancel = () => strike.remove();
 }
 
-function syncNativeChimeState() {
-  const modal = document.querySelector(".ag-settings-modal");
-  if (!modal) return;
-  const row = [...modal.querySelectorAll(".ag-set-notif-row, .ag-set-toggle-card")].find((el) => {
-    const title = el.querySelector(".ag-set-notif-row-title, .ag-set-toggle-title")?.textContent?.trim();
-    return title === "Message chimes";
-  });
-  const input = row?.querySelector("input[type=checkbox]");
-  if (!(input instanceof HTMLInputElement)) return;
-  if (state.settings.sounds.messageEnabled !== input.checked) {
-    state.settings.sounds.messageEnabled = input.checked;
-    broadcastConfig();
-    debounceSave();
-  }
-}
-
 function flairTickerTick() {
-  syncNativeChimeState();
   if (document.hidden || state.settings.studio.reduceMotion || state.settings.studio.renderInAgnostr === false) return;
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
   const stars = visibleFxTargets(".flair-stars > .flairFx");
@@ -1891,6 +1946,7 @@ function syncSettingsIntegration() {
   if (title === "Appearance") injectAppearanceExtras(modal);
   else if (title === "Privacy & Trust") injectNativePrivacy(modal);
   else if (title === "Notifications") injectNativeSounds(modal);
+  else clearNativeSoundsOverride(modal);
   syncThemeCards(modal);
 }
 
@@ -2171,17 +2227,6 @@ document.addEventListener(
   (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const nativeChimeRow = target.closest(".ag-set-notif-row, .ag-set-toggle-card");
-    if (
-      nativeChimeRow &&
-      target.matches('input[type="checkbox"]') &&
-      nativeChimeRow.textContent?.includes("Message chimes")
-    ) {
-      state.settings.sounds.messageEnabled = target.checked;
-      broadcastConfig();
-      debounceSave();
-      return;
-    }
     if (target.matches("[data-ba-strip-tag]")) {
       const name = target.getAttribute("data-ba-strip-tag");
       updateSettings((s) => {
@@ -2520,6 +2565,12 @@ function handleAction(action) {
       break;
     case "action-send":
       sendCustomAction();
+      break;
+    case "action-insert-user":
+      insertCustomActionToken("{user}");
+      break;
+    case "action-insert-sender":
+      insertCustomActionToken("{sender}");
       break;
     case "action-cancel":
       closeActionModal();
@@ -2992,7 +3043,7 @@ function syncLastOutgoing() {
 // ---------------------------------------------------------------------------
 
 function mapBetterTab(tab) {
-  const map = { studio: "line", line: "line", client: "client", general: "general", theme: "general" };
+  const map = { studio: "line", line: "line", client: "client", general: "line", theme: "line" };
   return map[tab] || "line";
 }
 
@@ -3237,15 +3288,9 @@ function returnToPublicChat() {
 }
 
 function ensureSuiteBetter() {
-  const show = state.settings.ui.showButton !== false;
   const footer = document.querySelector(".ag-suite-footer");
   if (!footer) return;
   let button = footer.querySelector("[data-ba-suite-better]");
-  if (!show) {
-    button?.remove();
-    footer.classList.remove("ba-suite-footer-dynamic");
-    return;
-  }
   if (!button) {
     button = document.createElement("button");
     button.type = "button";
@@ -3621,6 +3666,7 @@ function lineVisual(st) {
   if (st.underline) out.underline = true;
   if (st.strike) out.strike = true;
   if (st.rainbow) out.rainbow = true;
+  if (st.obf) out.obf = true;
   return Object.keys(out).length ? out : null;
 }
 
@@ -3640,6 +3686,21 @@ function applyLineClasses(el, prefix, vis, row) {
   } else if (el.dataset.baLineRainbow) {
     el.classList.remove("fmtRainbow");
     delete el.dataset.baLineRainbow;
+  }
+  if (vis?.obf) {
+    if (!el.classList.contains("fmtObf")) {
+      el.classList.add("fmtObf");
+      delete el.dataset.obfText;
+      delete el.dataset.obfStatic;
+      obfBursts.delete(el);
+    }
+  } else if (el.classList.contains("fmtObf")) {
+    const real = el.dataset.obfText;
+    if (real != null) el.textContent = real;
+    el.classList.remove("fmtObf");
+    delete el.dataset.obfText;
+    delete el.dataset.obfStatic;
+    obfBursts.delete(el);
   }
   if (!vis) return;
   const ns = prefix === "ba-line-name" ? "name" : "msg";
@@ -4307,11 +4368,40 @@ function sendAction(kind) {
   if (sendComposerText(text)) closePanel();
 }
 
-function formatActionText(raw, mention) {
+function selfMention() {
+  const name = String(state.status?.nickname || "").trim();
+  const pubkey = String(state.status?.pubkey || "").trim();
+  const tag = pubkey ? pubkey.slice(-4) : "";
+  if (!name && !tag) return "";
+  return `@${name || "you"}${tag ? `#${tag}` : ""}`;
+}
+
+function formatActionText(raw, mention, sender) {
   const cleaned = String(raw || "").replace(/^\*+|\*+$/g, "").trim();
   if (!cleaned) return "";
-  const core = cleaned.includes("{user}") ? cleaned.replace(/\{user\}/g, mention) : `${cleaned} ${mention}`;
+  const core = cleaned
+    .replace(/\{user\}/g, mention || "")
+    .replace(/\{sender\}/g, sender || "");
   return `* ${core} *`;
+}
+
+function insertCustomActionToken(token) {
+  const input = state.shadow?.querySelector("#ba-custom-action-input");
+  if (!input) return;
+  insertInto(input, token);
+}
+
+function sendSlashAction(raw) {
+  const match = String(raw || "").match(/^\/me\s+([\s\S]+)$/i);
+  if (!match) return false;
+  const text = match[1].trim();
+  if (!text) return false;
+  updateSettings((s) => {
+    s.actions.custom = text.slice(0, 60);
+  });
+  const body = formatActionText(text, state.contextTarget?.mention || "", selfMention());
+  if (!body) return false;
+  return sendComposerText(body);
 }
 
 function closeActionModal() {
@@ -4338,7 +4428,11 @@ function renderCustomAction() {
     <div class="ba-modal-body">
       <label class="ba-label" for="ba-custom-action-input">Action</label>
       <input id="ba-custom-action-input" class="ba-input" maxlength="60" value="${h(action)}" spellcheck="false" autocomplete="off">
-      <div class="ba-hint" style="margin-top:5px">Use <code class="ba-code">{user}</code> in your text, or it is appended automatically.</div>
+      <div class="ba-set-chips" style="margin-top:7px">
+        <button type="button" class="ba-set-chip" data-action="action-insert-user" title="Insert the target user">{user}</button>
+        <button type="button" class="ba-set-chip" data-action="action-insert-sender" title="Insert your name">{sender}</button>
+      </div>
+      <div class="ba-hint" style="margin-top:6px">Use <code class="ba-code">{user}</code> for the target and <code class="ba-code">{sender}</code> for your name. Nothing is appended automatically.</div>
       <div class="ba-card" style="margin-top:10px;margin-bottom:0">
         <div class="ba-card-head"><span class="ba-card-title">Preview</span></div>
         <div class="ba-preview-line" data-role="action-preview" style="font-size:13px"></div>
@@ -4354,7 +4448,7 @@ function renderCustomAction() {
     const raw = input?.value || "";
     state.customAction.text = raw;
     const mention = target?.mention || "";
-    const preview = formatActionText(raw, mention);
+    const preview = formatActionText(raw, mention, selfMention());
     const p = container.querySelector("[data-role='action-preview']");
     if (p) p.textContent = preview;
   };
@@ -4389,7 +4483,7 @@ function sendCustomAction() {
   updateSettings((s) => {
     s.actions.custom = raw.slice(0, 60);
   });
-  const body = formatActionText(raw, target.mention);
+  const body = formatActionText(raw, target.mention, selfMention());
   if (!body) return;
   closeActionModal();
   clearStuckHoverMenus(null);
@@ -4493,7 +4587,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.8";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.9";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4510,7 +4604,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.8"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.9"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
@@ -4626,9 +4720,11 @@ function observePage() {
 // ---------------------------------------------------------------------------
 
 async function init() {
+  let storedSettings = {};
   try {
     const stored = await api.storage.local.get(STORAGE_KEY);
-    state.settings = normalizeSettings(stored?.[STORAGE_KEY] || {});
+    storedSettings = stored?.[STORAGE_KEY] || {};
+    state.settings = normalizeSettings(storedSettings);
   } catch {
     state.settings = normalizeSettings({});
   }
@@ -4643,15 +4739,21 @@ async function init() {
     if (!change) return;
     const before = change.oldValue?.enabled !== false;
     const after = change.newValue?.enabled !== false;
-    if (before !== after) location.reload();
+    if (before === after) return;
+    if (after) overrideNativeNotifications();
+    else restoreNativeNotifications();
+    location.reload();
   });
 
   window.addEventListener("message", handlePageMessage);
   document.addEventListener("ba-page", handlePageCustomEvent);
   if (state.settings.enabled === false) {
+    restoreNativeNotifications();
     hello();
     return;
   }
+  document.documentElement.classList.add("ba-active");
+  overrideNativeNotifications();
   document.addEventListener("pointerdown", () => {
     if (!state.soundUnlocked) {
       state.soundUnlocked = true;
@@ -4659,6 +4761,33 @@ async function init() {
     }
   }, { capture: true, passive: true });
   document.addEventListener("click", handleGlobalClickSound, true);
+  const runSlashAction = (event) => {
+    const ta = composerTextarea();
+    if (!(ta instanceof HTMLTextAreaElement) || !/^\/me\s+/i.test(ta.value)) return false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return sendSlashAction(ta.value);
+  };
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      const ta = event.target;
+      if (!(ta instanceof HTMLTextAreaElement) || !ta.matches(".ag-composer-input")) return;
+      if (!/^\/me\s+/i.test(ta.value)) return;
+      runSlashAction(event);
+    },
+    true,
+  );
+  document.addEventListener(
+    "click",
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest(".ag-composer-send-btn")) return;
+      runSlashAction(event);
+    },
+    true,
+  );
   let lastHoverCleanup = 0;
   document.addEventListener(
     "pointermove",

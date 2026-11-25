@@ -85,7 +85,6 @@ export const DEFAULT_SETTINGS = {
     betterTab: "line",
     firstRun: true,
     panelOpen: false,
-    showButton: true,
   },
 };
 
@@ -209,9 +208,8 @@ export function normalizeSettings(raw) {
   // ui
   s.ui.firstRun = s.ui.firstRun === true;
   s.ui.panelOpen = s.ui.panelOpen === true;
-  s.ui.showButton = s.ui.showButton !== false;
   delete s.ui.showVoiceMemo;
-  if (!["line", "client", "general"].includes(s.ui.betterTab)) s.ui.betterTab = "line";
+  if (!["line", "client"].includes(s.ui.betterTab)) s.ui.betterTab = "line";
 
   return s;
 }
