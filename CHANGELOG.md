@@ -2,6 +2,18 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.14 — Rainbow styles, aurora, sonar, selection fix
+
+- Added a selectable **Rainbow style** under Better Agnostr → Line.
+- **Glub** is the default and matches glub.chat: original palette, no screen blend, no white glow, right-to-left motion.
+- **Bright** keeps the 1.1.11 reworked rainbow: brighter fill, screen blend, white glow, left-to-right motion.
+- The rainbow style is device-local and is not written into outgoing events.
+- Both message previews follow the selected rainbow style.
+- Fixed rainbow colours resetting when selecting and deselecting a message by re-decorating rows after React rewrites their classes and by keeping flair rainbow fallbacks rainbow.
+- Fixed the sonar cross artifact by replacing its scanline overlay with a soft radial scope glow.
+- Reworked aurora into layered northern-lights curtains with stars, rays, folds, sway, and breathing.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.1.13 — Badge rendering, profile clients, timestamps
 
 - Fixed BA and spoofed-client plaques rendering transparent or glowing under rainbow and colour line effects.

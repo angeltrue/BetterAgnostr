@@ -44,6 +44,7 @@ A Chromium extension for **agnostr.com**: event inspector, Glub line and flair s
 - **Hug / Slap / Custom action** commands, including `/me <text>`.
 - **Categorized emoji picker** with 2,300+ base emoji.
 - **Full-width stars flair** with randomized shooting stars.
+- **Selectable rainbow styles:** Glub (default, matches glub.chat) or Bright (high-contrast glow).
 - **Automatic settings backup** that survives extension updates and storage loss.
 - Native app rail with workspace switching, groups, settings, and the Agnostr Suite.
 
@@ -59,7 +60,7 @@ This branch is the Chromium port. The Firefox build remains on `main`.
 4. Click **Load unpacked** and select `dist/`.
 5. Open or reload <https://agnostr.com/>.
 
-The unpacked build is `release/better-agnostr-1.1.13-chromium.zip`. Chromium 148 or newer is required. The manifest uses a stable key, so replacing the unpacked folder keeps the same extension ID and preserves extension storage.
+The unpacked build is `release/better-agnostr-1.1.14-chromium.zip`. Chromium 148 or newer is required. The manifest uses a stable key, so replacing the unpacked folder keeps the same extension ID and preserves extension storage.
 
 ### Development launch
 
@@ -83,7 +84,7 @@ Open **Agnostr Settings → Better Agnostr**. On mobile, open **Apps → Setting
 - `&l` bold, `&o` italic, `&n` underline, `&m` strike, `&k` obfuscate, `&g` rainbow, `&r` reset, `&0`–`&f` colours.
 - Placeholders: `{name}`, `{tag}`, `{msg}`. A template without `{msg}` gets the message appended.
 - Flairs: fire, lightning, stars, rain, plume, neon, matrix, sonar, fireflies, bubbles, aurora, bitcoin, glitch, and sol.
-- Rainbow runs left-to-right and leaves emoji colours intact.
+- Rainbow style is selectable: **Glub** (default, glub.chat palette and motion) or **Bright** (high-contrast glow). Both leave emoji colours intact.
 - `&k` obfuscates usernames and message text.
 - `sol` is gated by glub.chat's NIP-05 rule.
 
@@ -143,7 +144,7 @@ The toolbar popup's **Enable Better Agnostr** switch reloads every open Agnostr 
 
 ```bash
 npm install
-node build.mjs       # writes dist/ and better-agnostr-1.1.13-chromium.zip
+node build.mjs       # writes dist/ and better-agnostr-1.1.14-chromium.zip
 ```
 
 Source layout:

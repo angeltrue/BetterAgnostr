@@ -851,6 +851,12 @@ function injectPageStyles() {
   applyTheme();
 }
 
+function applyRainbowStyle() {
+  const mode = state.settings.studio.rainbowStyle === "bright" ? "bright" : "glub";
+  document.documentElement.dataset.baRainbow = mode;
+  if (state.host) state.host.dataset.baRainbow = mode;
+}
+
 function applyTheme() {
   const head = document.head || document.documentElement;
   if (!head) return;
@@ -862,6 +868,7 @@ function applyTheme() {
       head.appendChild(state.themeStyle);
     }
   }
+  applyRainbowStyle();
   const theme = themeById(state.settings.theme.preset);
   const themeCss = theme ? buildThemeCss(theme) : "";
   if (theme) document.documentElement.dataset.baTheme = theme.id;
@@ -1125,6 +1132,15 @@ function betterLineHtml() {
     </div>
 
     <div class="ag-set-group">
+      <span class="ag-set-label">Rainbow style</span>
+      <div class="ba-set-chips">
+        <button type="button" class="ba-set-chip" data-ba-rainbow-style="glub">Glub</button>
+        <button type="button" class="ba-set-chip" data-ba-rainbow-style="bright">Bright</button>
+      </div>
+      <div class="ba-set-note" style="margin-top:6px">Glub matches glub.chat. Bright uses the high-contrast rainbow. This choice stays on this device.</div>
+    </div>
+
+    <div class="ag-set-group">
       <div class="ba-set-label-row">
         <span class="ag-set-label">Line format</span>
         <span class="ba-set-count" data-ba-template-count></span>
@@ -1282,6 +1298,9 @@ function syncBetterSettings(modal) {
   for (const el of modal.querySelectorAll("[data-ba-flair-choice]")) {
     const active = (el.getAttribute("data-ba-flair-choice") || "") === (state.settings.studio.flair || "");
     el.classList.toggle("active", active);
+  }
+  for (const el of modal.querySelectorAll("[data-ba-rainbow-style]")) {
+    el.classList.toggle("is-active", (el.getAttribute("data-ba-rainbow-style") || "glub") === state.settings.studio.rainbowStyle);
   }
   const count = modal.querySelector("[data-ba-template-count]");
   if (count) {
@@ -1441,7 +1460,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.13";
+  const version = manifest.version || "1.1.14";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -2154,6 +2173,20 @@ document.addEventListener(
       if (modal) {
         for (const t of modal.querySelectorAll("[data-ba-better-tab]")) t.classList.toggle("is-active", t === betterTab);
         renderBetterTabContent(modal);
+        syncBetterSettings(modal);
+      }
+      return;
+    }
+    const rainbowStyle = target.closest("[data-ba-rainbow-style]");
+    if (rainbowStyle) {
+      event.preventDefault();
+      const style = rainbowStyle.getAttribute("data-ba-rainbow-style") === "bright" ? "bright" : "glub";
+      updateSettings((s) => {
+        s.studio.rainbowStyle = style;
+      });
+      const modal = document.querySelector(".ag-settings-modal");
+      if (modal) {
+        state.betterPreviewSig = "";
         syncBetterSettings(modal);
       }
       return;
@@ -3558,7 +3591,10 @@ function decorateRows() {
     markRowClientLabels(row, ev);
     const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
     const signature = `${id}:${state.settingsEpoch}:${ownPubkey}`;
-    if (row.dataset.baDecorated === signature) continue;
+    // Deliberately decorate every pass. React may rewrite a row's className (when the
+    // action menu opens, for example) without touching the data-* attributes BA wrote,
+    // so a signature match is not proof that the flair and rainbow are still on screen.
+    // Each apply* helper has its own cheap idempotence check for the common case.
     decorateRow(row, ev);
     row.dataset.baDecorated = signature;
   }
@@ -3921,19 +3957,20 @@ function applyFlair(row, ev, flair) {
     clearFlair(row);
     return;
   }
+  const classes = flairClass(flair).split(" ").filter(Boolean);
   const layer = row.querySelector(":scope > .ba-flair-layer");
   const hasFx = !flairHasFx(flair) || !!layer?.querySelector(":scope > .flairFx");
   const hasScan = !flairOverlayInner(flair) || !!layer?.querySelector(":scope > .flairScan");
   const vars = flairVars(flair);
   const hasVars = Object.keys(vars).every((k) => row.style.getPropertyValue(k));
+  const hasClasses = classes.every((cls) => row.classList.contains(cls));
   const quiet = !!state.settings.studio.reduceMotion;
-  if (row.dataset.baFlair === flair && row.classList.contains("flair") && layer && hasFx && hasScan && hasVars) {
+  if (row.dataset.baFlair === flair && hasClasses && layer && hasFx && hasScan && hasVars) {
     row.classList.toggle("flairQuiet", quiet);
     layer.classList.toggle("flairQuiet", quiet);
     return;
   }
   clearFlair(row);
-  const classes = flairClass(flair).split(" ").filter(Boolean);
   for (const cls of classes) row.classList.add(cls);
   row.dataset.baFlair = flair;
   for (const [k, v] of Object.entries(vars)) row.style.setProperty(k, v);
@@ -4762,7 +4799,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.13";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.14";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4779,7 +4816,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.13"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.14"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
