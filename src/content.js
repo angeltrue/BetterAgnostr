@@ -184,6 +184,9 @@ const state = {
   verified: new Map(),
   entities: new Map(),
   restoreMap: new WeakMap(),
+  richObservers: new WeakMap(),
+  richRepairing: new WeakSet(),
+  repairingRows: new WeakSet(),
   logRenderTimer: null,
   themeStyle: null,
   pageStyle: null,
@@ -857,6 +860,13 @@ function applyRainbowStyle() {
   if (state.host) state.host.dataset.baRainbow = mode;
 }
 
+function applyUiPreferences() {
+  document.documentElement.classList.toggle(
+    "ba-hide-notification-button",
+    state.settings.appearance?.hideNotificationButton === true,
+  );
+}
+
 function applyTheme() {
   const head = document.head || document.documentElement;
   if (!head) return;
@@ -869,6 +879,7 @@ function applyTheme() {
     }
   }
   applyRainbowStyle();
+  applyUiPreferences();
   const theme = themeById(state.settings.theme.preset);
   const themeCss = theme ? buildThemeCss(theme) : "";
   if (theme) document.documentElement.dataset.baTheme = theme.id;
@@ -1120,6 +1131,12 @@ function baToggle(path, title, desc = "") {
   </label>`;
 }
 
+
+function interfaceGroupHtml() {
+  return `<div class="ag-set-group" data-ba-settings-group="interface">
+    ${baToggle("appearance.hideNotificationButton", "Hide notification button", "Remove the Alerts button from the rail and mobile tab bar")}
+  </div>`;
+}
 
 function betterSettingsPaneHtml() {
   const tabs = [
@@ -1461,7 +1478,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.15";
+  const version = manifest.version || "1.2.0";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1788,12 +1805,19 @@ function injectAppearanceExtras(modal) {
       rainbowGroup = holder.firstElementChild;
       themeGroup.after(rainbowGroup);
     }
+    let interfaceGroup = stack.querySelector("[data-ba-settings-group='interface']");
+    if (!interfaceGroup) {
+      const holder = document.createElement("div");
+      holder.innerHTML = interfaceGroupHtml();
+      interfaceGroup = holder.firstElementChild;
+      rainbowGroup.after(interfaceGroup);
+    }
     let cssGroup = stack.querySelector("[data-ba-settings-group='css']");
     if (!cssGroup) {
       const holder = document.createElement("div");
       holder.innerHTML = customCssGroupHtml();
       cssGroup = holder.firstElementChild;
-      rainbowGroup.after(cssGroup);
+      interfaceGroup.after(cssGroup);
     }
     let fontGroup = stack.querySelector("[data-ba-settings-group='font']");
     if (!fontGroup) {
@@ -2008,6 +2032,15 @@ function syncSettingsMobileTitle(modal, title) {
   if (section && title && section.textContent !== title) section.textContent = title;
 }
 
+function settingsModalTitle(modal) {
+  return (
+    modal.querySelector(".ag-set-detail-title")?.textContent?.trim() ||
+    modal.querySelector(".ag-set-mobile-title")?.textContent?.trim() ||
+    modal.getAttribute("aria-label")?.trim() ||
+    ""
+  );
+}
+
 function syncSettingsIntegration() {
   if (state.settings.enabled === false) return;
   const modal = document.querySelector(".ag-settings-modal");
@@ -2025,7 +2058,18 @@ function syncSettingsIntegration() {
   }
   const nav = ensureBetterNav(modal);
   const aboutNav = ensureAboutNav(modal);
-  if (!nav || !aboutNav) return;
+  if (!nav || !aboutNav) {
+    // The new Alerts shortcut opens the Notifications pane as a direct detail
+    // sheet with no nav list. Treat it exactly like the Settings → Notifications
+    // pane so the Better Agnostr sound controls appear inline there too.
+    const title = settingsModalTitle(modal);
+    if (title === "Appearance") injectAppearanceExtras(modal);
+    else if (title === "Privacy & Trust") injectNativePrivacy(modal);
+    else if (title === "Notifications") injectNativeSounds(modal);
+    else clearNativeSoundsOverride(modal);
+    syncThemeCards(modal);
+    return;
+  }
   if (state.settingsBetterActive || state.aboutActive) {
     if (enterSettingsMobileDetail(modal)) return;
   }
@@ -2048,7 +2092,7 @@ function syncSettingsIntegration() {
   aboutNav.classList.remove("active");
   hideBetterSettingsPane(modal);
   hideAboutPane(modal);
-  const title = modal.querySelector(".ag-set-detail-title")?.textContent?.trim();
+  const title = settingsModalTitle(modal);
   syncSettingsMobileTitle(modal, title);
   if (title === "Appearance") injectAppearanceExtras(modal);
   else if (title === "Privacy & Trust") injectNativePrivacy(modal);
@@ -3569,6 +3613,33 @@ function ensureToolbars() {
   }
 }
 
+// React owns the row's className. When it re-renders a row (for example when the
+// message action menu opens), it can drop the classes BA added even though the
+// data-* attributes survive. The normal enhance pass is deliberately debounced,
+// which leaves a visible flash of unformatted text. Repair the one affected row
+// synchronously from the mutation observer instead, before the next paint.
+function repairRowNow(row) {
+  if (!(row instanceof HTMLElement)) return;
+  if (state.repairingRows.has(row)) return;
+  if (!row.dataset.baDecorated && !row.dataset.baFlair && !row.querySelector(".fmtRainbow, [data-ba-line-rainbow]")) return;
+  const id = row.id?.startsWith("msg-") ? row.id.slice(4) : "";
+  if (!id) return;
+  const ev = eventById(id);
+  if (!ev) return;
+  state.repairingRows.add(row);
+  try {
+    markRowClientLabels(row, ev);
+    decorateRow(row, ev);
+    const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
+    row.dataset.baDecorated = `${id}:${state.settingsEpoch}:${ownPubkey}`;
+  } finally {
+    // Keep the row locked until the observer has drained the mutations this
+    // repair just made. Releasing in this microtask would let those records
+    // trigger another repair, and another, forever.
+    window.setTimeout(() => state.repairingRows.delete(row), 0);
+  }
+}
+
 function decorateRows() {
   const rows = document.querySelectorAll(".ag-msg-row");
   for (const row of rows) {
@@ -3629,9 +3700,12 @@ function eventHandle(ev) {
   return `@${String(name).toLowerCase()}#${String(ev.pubkey || "").slice(-4).toLowerCase()}`;
 }
 
+function isBetterClientName(name) {
+  return /^(betteragnostr|better-agnostr|better agnostr)$/i.test(String(name || "").trim());
+}
+
 function isBetterClient(ev) {
-  const client = String(getTagValue(ev.tags, "client") || "").trim();
-  return /^(betteragnostr|better-agnostr|better agnostr)$/i.test(client);
+  return isBetterClientName(getTagValue(ev.tags, "client"));
 }
 
 function ownBetterClient() {
@@ -3648,8 +3722,11 @@ function setBetterName(el, show) {
 function knownBetterHandle(handle) {
   const value = String(handle || "").trim().toLowerCase();
   if (!value) return false;
-  for (const known of state.betterPeers.values()) {
-    if (known.toLowerCase() === value) return true;
+  for (const [pubkey, known] of state.betterPeers) {
+    if (known.toLowerCase() !== value) continue;
+    // A peer who once used Better Agnostr but now sends from another client is
+    // not a BA user on that event. Only the latest client tag decides the plaque.
+    return isBetterClientName(state.peerClients.get(pubkey)?.name);
   }
   return false;
 }
@@ -3662,11 +3739,10 @@ function markRowClientLabels(row, ev) {
   if (!(author instanceof HTMLElement)) return;
   const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
   const ownMessage = !!ev.pubkey && String(ev.pubkey).toLowerCase() === ownPubkey;
-  const known = !!ev.pubkey && state.betterPeers.has(String(ev.pubkey).toLowerCase());
-  const better = isBetterClient(ev) || (ownMessage && ownBetterClient()) || known;
+  const better = isBetterClient(ev) || (ownMessage && ownBetterClient());
   const client = String(getTagValue(ev.tags, "client") || "").trim().slice(0, 32);
   const clientKey = client.toLowerCase();
-  const spoofed = better && !!client && !/^(betteragnostr|better-agnostr|better agnostr)$/i.test(client);
+  const spoofed = better && !!client && !isBetterClientName(client);
   const showClient = !better && !!client && !KNOWN_VISUAL_CLIENTS.has(clientKey);
   setBetterName(author, better);
   author.classList.toggle("ba-better-spoof", spoofed);
@@ -3996,6 +4072,31 @@ function applyFlair(row, ev, flair) {
   row.prepend(wrap);
 }
 
+function ensureRichObserver(root) {
+  if (state.richObservers.has(root) || typeof MutationObserver !== "function") return;
+  const observer = new MutationObserver(() => {
+    if (state.richRepairing.has(root)) return;
+    const row = root.closest(".ag-msg-row");
+    if (!(row instanceof HTMLElement)) return;
+    const id = row.id?.startsWith("msg-") ? row.id.slice(4) : "";
+    if (!id) return;
+    const ev = eventById(id);
+    if (!ev) return;
+    const meta = parseGlubMeta(ev.tags);
+    if (!meta.rich) return;
+    state.richRepairing.add(root);
+    try {
+      applyRichText(row, ev, meta);
+    } finally {
+      // Let the observer drain the records this repair produced before allowing
+      // another pass. Releasing immediately would loop on our own innerHTML write.
+      window.setTimeout(() => state.richRepairing.delete(root), 0);
+    }
+  });
+  observer.observe(root, { childList: true, subtree: true, characterData: true });
+  state.richObservers.set(root, observer);
+}
+
 function applyRichText(row, ev, meta) {
   const root = row.querySelector(".ag-msg-rich");
   if (!root) return;
@@ -4018,6 +4119,7 @@ function applyRichText(row, ev, meta) {
     root.innerHTML = renderFormatHtml(rich);
     root.dataset.baRich = ev.id;
     state.richApplied.set(root, { id: ev.id, html: root.innerHTML });
+    ensureRichObserver(root);
     return;
   }
 
@@ -4072,6 +4174,7 @@ function applyRichText(row, ev, meta) {
   if (changed) {
     root.dataset.baRich = ev.id;
     state.richApplied.set(root, { id: ev.id, html: root.innerHTML });
+    ensureRichObserver(root);
   }
 }
 
@@ -4099,6 +4202,11 @@ function restoreRich(row) {
   const root = row.querySelector(".ag-msg-rich");
   if (!root) return;
   state.richApplied.delete(root);
+  const observer = state.richObservers.get(root);
+  if (observer) {
+    observer.disconnect();
+    state.richObservers.delete(root);
+  }
   if (!root.dataset.baRich) return;
   const original = state.restoreMap.get(root);
   if (original != null) root.innerHTML = original;
@@ -4802,7 +4910,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.15";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.2.0";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4819,7 +4927,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.15"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.2.0"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
@@ -4878,6 +4986,7 @@ function observePage() {
         const row = target instanceof Element ? target.closest(".ag-msg-row") : null;
         if (row) {
           delete row.dataset.baDecorated;
+          repairRowNow(row);
           relevant = true;
         }
         for (const node of [...record.addedNodes, ...record.removedNodes]) {
@@ -4895,6 +5004,10 @@ function observePage() {
         }
       } else if (record.type === "attributes") {
         const el = record.target;
+        if (el instanceof Element) {
+          const row = el.closest(".ag-msg-row");
+          if (row) repairRowNow(row);
+        }
         if (
           el === document.documentElement ||
           el === document.body ||

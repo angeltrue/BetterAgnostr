@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Better Agnostr",
-  "version": "1.1.15",
+  "version": "1.2.0",
   "minimum_chrome_version": "148",
   "description": "Message JSON inspector, Glub line/flair studio, client controls, retro sounds, privacy scrubber, and call blocking for agnostr.com.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvSaO0I31t3Qxs9cpmd583uv4EPu3f2kyR2WpfAUzlKj+1QJ5sRDnyt+Fle2lETHmbzhEmJDlGFmNviEmp4Ot3hXP+7W1dVwOCSuUrRbQ04tfMNJRTsv3XdnwL35mKLbGSvUM5DL5Hjn/ZfdXoVHBFaid6vG91EXdXS7wjkB4sKC+/LKLflPkrvM5ZFMnWabrZSXK6dCG7nJiESB0RHGIfDZ45eKj7RHOGbkB7HFbmQY4P+REaPB4ZrHtJYeNiT90zoyejrhhqD6KA+95k/JRHWG6XQtXkh81HqdOnC02sUKzR0hKjlIWphaz0DKpQ0NQohPb/mk1p8o4zI8g9ElM7QIDAQAB",
