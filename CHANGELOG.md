@@ -2,6 +2,16 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.1.13 — Badge rendering, profile clients, timestamps
+
+- Fixed BA and spoofed-client plaques rendering transparent or glowing under rainbow and colour line effects.
+- Reset plaque text fill, shadow, animation, and clipping so the plaque always displays normally.
+- Updated the peer profile client pill from the event client tag instead of Agnostr's cached client.
+- Profile pill now shows spoofed clients and a BA-styled **BetterAgnostr** value.
+- Added **Hide timestamps** under Privacy & Trust → Better Agnostr, disabled by default.
+- Timestamp hiding removes per-message clock times without hiding date dividers.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.1.12 — Native sound effects off
 
 - Disabled Agnostr's separate **Sound Effects** engine, which was still playing default incoming-message, mention, DM, send, and UI sounds.

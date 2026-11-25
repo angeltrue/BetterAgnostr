@@ -166,6 +166,7 @@ const state = {
   decoratedRows: new Set(),
   richApplied: new WeakMap(),
   betterPeers: new Map(),
+  peerClients: new Map(),
   emojiCategory: "smileys",
   lastBitchatReplace: 0,
   lastBetterClients: 0,
@@ -643,8 +644,19 @@ function handlePageCustomEvent(event) {
 function rememberEvent(ev) {
   if (!ev || typeof ev.id !== "string") return;
   if (!state.events.has(ev.id)) state.events.set(ev.id, ev);
-  if (ev.pubkey && Array.isArray(ev.tags) && isBetterClient(ev)) {
-    state.betterPeers.set(String(ev.pubkey).toLowerCase(), eventHandle(ev));
+  if (ev.pubkey && Array.isArray(ev.tags)) {
+    const pubkey = String(ev.pubkey).toLowerCase();
+    if (isBetterClient(ev)) state.betterPeers.set(pubkey, eventHandle(ev));
+    const client = String(getTagValue(ev.tags, "client") || "").trim();
+    if (client) {
+      const at = Number(ev.created_at) || 0;
+      const previous = state.peerClients.get(pubkey);
+      if (!previous || at >= previous.at) state.peerClients.set(pubkey, { name: client, at });
+      if (state.peerClients.size > 2000) {
+        const first = state.peerClients.keys().next().value;
+        if (first) state.peerClients.delete(first);
+      }
+    }
   }
   // Bound memory.
   if (state.events.size > 1500) {
@@ -929,6 +941,7 @@ function applyCallCss() {
   const calls = state.settings.privacy.calls;
   document.documentElement.classList.toggle("ba-calls-hidden", !!(calls.disable && calls.hideUi));
   document.documentElement.classList.toggle("ba-hide-locate", state.settings.privacy.hideLocate !== false);
+  document.documentElement.classList.toggle("ba-hide-timestamps", state.settings.privacy.hideTimestamps === true);
   removeCallMenuItems();
   applyCallButtons();
   hideCallUi();
@@ -1428,7 +1441,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.1.12";
+  const version = manifest.version || "1.1.13";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1593,6 +1606,7 @@ function nativePrivacyHtml() {
   return `<div class="ag-set-group ba-native-group" data-ba-native="privacy">
     <span class="ag-set-label">Better Agnostr</span>
     ${baToggle("privacy.hideLocate", "Hide Locate Me")}
+    ${baToggle("privacy.hideTimestamps", "Hide timestamps", "Hide per-message clock times in chat")}
     ${baToggle("privacy.omitTeleport", "Omit teleport tag")}
     ${baToggle("privacy.removeVoiceMemo", "Remove voice memo")}
     ${baToggle("privacy.stripTracking", "Strip tracking parameters")}
@@ -3622,6 +3636,47 @@ function markRowClientLabels(row, ev) {
   else delete author.dataset.baClient;
 }
 
+function clientPillDisplay(raw) {
+  const name = String(raw || "").trim();
+  const lower = name.toLowerCase();
+  if (!name) return null;
+  if (lower === "agnostr") return { text: "Agnostr", cls: "ag-client-pill-agnostr" };
+  if (lower === "glub.chat" || lower === "glubchat" || lower.startsWith("glub")) {
+    return { text: "Glub.chat", cls: "ag-client-pill-glubchat" };
+  }
+  if (lower === "nymchat" || lower === "nym" || lower.includes("nymchat")) {
+    return { text: "Nymchat", cls: "ag-client-pill-nymchat" };
+  }
+  if (/^betteragnostr$|^better-agnostr$|^better agnostr$/i.test(name)) {
+    return { text: "BetterAgnostr", cls: "ba-client-pill-ba" };
+  }
+  return { text: name === lower ? `${name.charAt(0).toUpperCase()}${name.slice(1)}` : name, cls: "ba-client-pill-unknown" };
+}
+
+function syncPeerClientPill(modal) {
+  const pill = modal.querySelector(".ag-peer-client-pill");
+  if (!(pill instanceof HTMLElement)) return;
+  const hexRow = [...modal.querySelectorAll(".ag-key-row")].find(
+    (row) => row.querySelector(".ag-key-label")?.textContent?.trim().toUpperCase() === "HEX PUBKEY",
+  );
+  const pubkey = String(hexRow?.querySelector(".ag-key-value")?.textContent || "").trim().toLowerCase();
+  if (!pubkey) return;
+  const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
+  let client = state.peerClients.get(pubkey);
+  if (!client && pubkey === ownPubkey && state.settings.client.policies.chat === "spoof" && state.settings.client.name) {
+    client = { name: state.settings.client.name, at: Date.now() };
+  }
+  if (!client) return;
+  const display = clientPillDisplay(client.name);
+  if (!display) return;
+  pill.textContent = display.text;
+  for (const cls of [...pill.classList]) {
+    if (cls.startsWith("ag-client-pill-") || cls.startsWith("ba-client-pill-")) pill.classList.remove(cls);
+  }
+  pill.classList.add(display.cls);
+  pill.dataset.baClientPill = "1";
+}
+
 function markBetterClients() {
   const now = Date.now();
   if (now - (state.lastBetterClients || 0) < 500) return;
@@ -3646,6 +3701,7 @@ function markBetterClients() {
     const label = (nameEl?.textContent || "").replace(/\s+/g, "").toLowerCase();
     const better = (isSelf && ownBetter) || knownBetterHandle(label);
     setBetterName(nameEl, better);
+    syncPeerClientPill(modal);
   }
   for (const title of document.querySelectorAll(".ag-sheet-hero-title")) {
     const label = (title.textContent || "").replace(/\s+/g, "").toLowerCase();
@@ -4706,7 +4762,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.1.12";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.1.13";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4723,7 +4779,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.12"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.1.13"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
