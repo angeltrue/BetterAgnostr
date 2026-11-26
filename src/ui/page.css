@@ -113,8 +113,7 @@
 
 /* Better Agnostr users get a small plaque next to their name. Client
    identification borders are owned by Agnostr itself. */
-.ba-better-name::after,
-.ba-client-name::after {
+.ba-better-name::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -146,10 +145,7 @@
   background: var(--accent-soft);
   color: var(--accent);
 }
-.ba-client-name::after { content: attr(data-ba-client); }
-.ba-better-name.ba-better-spoof::after { content: "BA · " attr(data-ba-client); }
-.ag-msg-head .ba-better-name::after,
-.ag-msg-head .ba-client-name::after { transform: translateY(-1px); }
+.ag-msg-head .ba-better-name::after { transform: translateY(-1px); }
 .ag-peer-modal-name.ba-better-name::after { margin-left: 6px; }
 
 .ag-peer-client-pill.ba-client-pill-unknown {
@@ -1357,7 +1353,7 @@ html.ba-hide-locate button[title^="Locate" i] {
 
 
 /* Normalize the native suite before its first paint so old Map/Search
-   utilities and the Bitchat label never flash. */
+   utilities and the Chat label never flash. */
 .ag-suite-footer {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }

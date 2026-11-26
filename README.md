@@ -1,24 +1,28 @@
-# 🚨 STOP RIGHT THERE. READ THE WARNINGS. 🚨
+# 🚨🚨🚨 **STOP. DO NOT INSTALL THIS YET.** 🚨🚨🚨
 
-## THIS BUILD IS UNSIGNED — FIREFOX WILL NOT KEEP IT
+## **THE FIREFOX XPI IS UNSIGNED. FIREFOX WILL REJECT IT. THIS IS NOT A DRILL.**
 
 > [!WARNING]
+> # **NO, REALLY.**
 > **This XPI has not been signed by Mozilla. Firefox Release and ESR will refuse to install it permanently.**
-> Clicking “Allow” harder will not fix this. Use `about:debugging` for a temporary install, or send the ZIP to AMO and wait like everyone else.
-> An unsigned XPI attached to a GitHub release is not a trust badge. If you install one from a stranger because the filename looked official, that is a you problem, not a Mozilla bug.
-> The Chromium ZIP is an unpacked pre-release, not a store build. It lives behind Developer Mode. No, that is not a personality.
+> **Clicking “Allow” harder will not fix this. Sending a screenshot of the error will not fix this. Mozilla does not care how excited you are.**
+> **Use `about:debugging` for a temporary install, or send the ZIP to AMO and wait like a normal person.**
+> **An unsigned XPI attached to a GitHub release is not a trust badge. If your security model is “the filename looked official,” please sit down.**
+> **The Chromium ZIP is an unpacked pre-release. It lives behind Developer Mode. That is not a personality, and it is not a store build.**
 
 ---
 
-# 🚨 AI WROTE THIS. ACT LIKE IT. 🚨
+# 🚨🚨🚨 **AI WAS HERE. YOU CAN TELL.** 🚨🚨🚨
 
-## GENERATIVE AI WAS USED. THIS IS NOT A FLEX.
+## **GENERATIVE AI HELPED BUILD THIS. TREAT IT LIKE A STRANGER'S PULL REQUEST.**
 
 > [!CAUTION]
-> **AI helped write this project. It is confident, fast, and occasionally completely wrong.**
-> Do not give it your nsec, your sats, or a community you actually like without reading the code and testing the build yourself.
-> “The AI said it was secure” is not an audit. “It worked on my machine” is not a test suite. “Just trust me” is not a threat model.
-> No warranty. No support contract. No refunds. No adults are coming to fix this for you.
+> # **THIS IS NOT AN AUDIT.**
+> **AI writes code confidently. Sometimes it is even correct. That is not the same thing as safe.**
+> **Do not give it your nsec, your sats, or a community you actually like without reading the code and testing the build yourself.**
+> **“The AI said it was secure” is not an audit. “It worked on my machine” is not a test suite. “Just trust me” is not a threat model.**
+> **No warranty. No support contract. No refunds. No adults are coming to fix this for you.**
+> **If that sounds harsh, good. The warning is doing its job.**
 
 ---
 
@@ -30,7 +34,7 @@ A browser extension for **agnostr.com**: line and flair studio, client tags, pri
 
 - Line templates, `&` colour codes, rich text, and 14 flair effects.
 - Glub/Bright rainbow toggle in Appearance.
-- Client-tag leave/spoof/strip policies and client labels.
+- Client-tag leave/spoof/strip policies and profile client pills.
 - Privacy scrubber, review-before-sign, teleport/timestamp/voice-memo hiding, and call blocking.
 - 12 Better Agnostr chimes, UI clicks, volume, and chime triggers.
 - JSON event viewer with tags, signatures, relay frames, and Glub previews.
@@ -41,7 +45,7 @@ A browser extension for **agnostr.com**: line and flair studio, client tags, pri
 
 1. Run `npm install` and `node build.mjs`.
 2. Firefox: open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → select `dist/manifest.json`.
-3. Chromium 148+: open `chrome://extensions`, enable **Developer mode**, and load `release/better-agnostr-1.2.0-chromium.zip` unpacked.
+3. Chromium 148+: open `chrome://extensions`, enable **Developer mode**, and load `release/better-agnostr-1.2.1-chromium.zip` unpacked.
 4. Open or reload <https://agnostr.com/>.
 
 Firefox 128 or newer is required. The unsigned XPI is in `release/`; permanent Firefox installation requires AMO signing.
