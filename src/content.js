@@ -111,13 +111,13 @@ const FONT_PRESETS = [
   { id: "plex", label: "IBM Plex Sans", stack: "'BA IBM Plex Sans', 'IBM Plex Sans', sans-serif" },
   { id: "atkinson", label: "Atkinson Hyperlegible", stack: "'BA Atkinson', 'Atkinson Hyperlegible', sans-serif" },
   { id: "lexend", label: "Lexend", stack: "'BA Lexend', Lexend, sans-serif" },
-  { id: "playfair", label: "Playfair Display", stack: "'BA Playfair', 'Playfair Display', Georgia, serif" },
-  { id: "cormorant", label: "Cormorant Garamond", stack: "'BA Cormorant', 'Cormorant Garamond', Georgia, serif" },
+  { id: "source-serif", label: "Source Serif 4", stack: "'BA Source Serif', 'Source Serif 4', Georgia, serif" },
+  { id: "plex-serif", label: "IBM Plex Serif", stack: "'BA Plex Serif', 'IBM Plex Serif', Georgia, serif" },
+  { id: "merriweather", label: "Merriweather", stack: "'BA Merriweather', Merriweather, Georgia, serif" },
+  { id: "crimson", label: "Crimson Pro", stack: "'BA Crimson', 'Crimson Pro', Georgia, serif" },
+  { id: "spectral", label: "Spectral", stack: "'BA Spectral', Spectral, Georgia, serif" },
+  { id: "noto-serif", label: "Noto Serif", stack: "'BA Noto Serif', 'Noto Serif', Georgia, serif" },
   { id: "baskerville", label: "Libre Baskerville", stack: "'BA Baskerville', 'Libre Baskerville', Georgia, serif" },
-  { id: "lora", label: "Lora", stack: "'BA Lora', Lora, Georgia, serif" },
-  { id: "literata", label: "Literata", stack: "'BA Literata', Literata, Georgia, serif" },
-  { id: "fraunces", label: "Fraunces", stack: "'BA Fraunces', Fraunces, Georgia, serif" },
-  { id: "instrument", label: "Instrument Serif", stack: "'BA Instrument', 'Instrument Serif', Georgia, serif" },
   { id: "noto", label: "Noto Sans", stack: "'Noto Sans', system-ui, sans-serif" },
   { id: "source", label: "Source Sans 3", stack: "'Source Sans 3', 'Source Sans Pro', sans-serif" },
   { id: "fira", label: "Fira Sans", stack: "'Fira Sans', system-ui, sans-serif" },
@@ -917,19 +917,20 @@ function applyFont() {
 @font-face{font-family:"BA Atkinson";src:url("${api.runtime.getURL("fonts/atkinson-700.woff2")}") format("woff2");font-weight:700;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Lexend";src:url("${api.runtime.getURL("fonts/lexend-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Lexend";src:url("${api.runtime.getURL("fonts/lexend-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Playfair";src:url("${api.runtime.getURL("fonts/playfair-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Playfair";src:url("${api.runtime.getURL("fonts/playfair-700.woff2")}") format("woff2");font-weight:700;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Cormorant";src:url("${api.runtime.getURL("fonts/cormorant-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Cormorant";src:url("${api.runtime.getURL("fonts/cormorant-700.woff2")}") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Source Serif";src:url("${api.runtime.getURL("fonts/source-serif-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Source Serif";src:url("${api.runtime.getURL("fonts/source-serif-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Plex Serif";src:url("${api.runtime.getURL("fonts/plex-serif-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Plex Serif";src:url("${api.runtime.getURL("fonts/plex-serif-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Merriweather";src:url("${api.runtime.getURL("fonts/merriweather-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Merriweather";src:url("${api.runtime.getURL("fonts/merriweather-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Crimson";src:url("${api.runtime.getURL("fonts/crimson-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Crimson";src:url("${api.runtime.getURL("fonts/crimson-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Spectral";src:url("${api.runtime.getURL("fonts/spectral-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Spectral";src:url("${api.runtime.getURL("fonts/spectral-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Noto Serif";src:url("${api.runtime.getURL("fonts/noto-serif-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"BA Noto Serif";src:url("${api.runtime.getURL("fonts/noto-serif-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Baskerville";src:url("${api.runtime.getURL("fonts/baskerville-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:"BA Baskerville";src:url("${api.runtime.getURL("fonts/baskerville-700.woff2")}") format("woff2");font-weight:700;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Lora";src:url("${api.runtime.getURL("fonts/lora-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Lora";src:url("${api.runtime.getURL("fonts/lora-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Literata";src:url("${api.runtime.getURL("fonts/literata-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Literata";src:url("${api.runtime.getURL("fonts/literata-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Fraunces";src:url("${api.runtime.getURL("fonts/fraunces-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Fraunces";src:url("${api.runtime.getURL("fonts/fraunces-600.woff2")}") format("woff2");font-weight:600;font-style:normal;font-display:swap}
-@font-face{font-family:"BA Instrument";src:url("${api.runtime.getURL("fonts/instrument-400.woff2")}") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 `;
   let extra = "";
   let stack = family.stack || "";
@@ -979,7 +980,7 @@ function markLocateButtons() {
 
 function isCallControlText(text) {
   const value = String(text || "").replace(/\s+/g, " ").trim();
-  return /(?:^|\b)(?:(?:start|join|answer|leave|end)\s+(?:(?:voice|video)\s+)?call|(?:voice|video)\s+call)\b|voice lounge|bitchat group call/i.test(value);
+  return /(?:^|\b)(?:(?:start|join|answer|leave|end)\s+(?:(?:voice|video)\s+)?call|(?:voice|video)\s+call)\b|voice lounge|chat group call/i.test(value);
 }
 
 function removeCallMenuItems() {
@@ -1478,7 +1479,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.2.0";
+  const version = manifest.version || "1.2.1";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1739,7 +1740,7 @@ function soundsSectionHtml() {
       </div>
       <div class="ag-set-card-list">
         ${toggleRow("Direct messages", "Encrypted one-to-one chats", "sounds.events.dm", events.dm !== false)}
-        ${toggleRow("Chat & rooms", "Bitchat and group channel messages", "sounds.events.chat", events.chat !== false)}
+        ${toggleRow("Chat & rooms", "Chat and group channel messages", "sounds.events.chat", events.chat !== false)}
         ${toggleRow("Mentions only", "Limit chat sounds to @mentions and direct replies", "sounds.events.mentionOnly", events.mentionOnly === true)}
         ${toggleRow("Call invites", "Incoming call signals", "sounds.events.calls", events.calls === true)}
       </div>
@@ -1829,7 +1830,7 @@ function injectAppearanceExtras(modal) {
         </select></div>
         <div class="ba-set-field"><span>Custom family</span><input class="ag-input" data-ba-setting="font.customFamily" maxlength="80" value="${h(state.settings.font.customFamily)}" placeholder="installed family name"></div>
         <div class="ba-set-field"><span>Custom URL</span><input class="ag-input" data-ba-setting="font.customUrl" maxlength="500" value="${h(state.settings.font.customUrl)}" placeholder="https://…/font.woff2"></div>
-        <div class="ba-set-note">IBM Plex, Atkinson Hyperlegible, Lexend, and seven serif families are bundled.</div>
+        <div class="ba-set-note">IBM Plex, Atkinson Hyperlegible, Lexend, and readable serif families are bundled.</div>
       </div>`;
       fontGroup = holder.firstElementChild;
       cssGroup.after(fontGroup);
@@ -3359,34 +3360,34 @@ function replaceBitchatText() {
   if (now - (state.lastBitchatReplace || 0) < 2000) return;
   state.lastBitchatReplace = now;
   const blocked = ".ag-msg-rich, .ag-msg-content, .ag-chat-row-preview, .ag-msg-preview, .ag-conv-preview, .ag-composer, textarea, input, pre, code, script, style";
-  const attrSelector = '[title*="Bitchat"], [aria-label*="Bitchat"], [placeholder*="Bitchat"]';
+  const attrSelector = '[title*="bitchat" i], [aria-label*="bitchat" i], [placeholder*="bitchat" i]';
   const roots = document.querySelectorAll(
-    ".ag-suite-popover, .ag-header, .ag-conv-header, .ag-conv-pane, .ag-srv-discord-pane, .ag-mobile-tabbar, .ag-settings-modal, .ag-peer-modal, .ag-sheet, .ag-quick-profile-popover, .ag-ctx-menu",
+    ".ag-app-rail, .ag-suite-popover, .ag-header, .ag-conv-header, .ag-conv-pane, .ag-srv-discord-pane, .ag-mobile-tabbar, .ag-settings-modal, .ag-peer-modal, .ag-sheet, .ag-quick-profile-popover, .ag-ctx-menu",
   );
   for (const root of roots) {
     if (!(root instanceof HTMLElement)) continue;
-    if (!(root.textContent || "").includes("Bitchat") && !root.querySelector(attrSelector)) continue;
+    if (!/bitchat/i.test(root.textContent || "") && !root.querySelector(attrSelector)) continue;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const parent = node.parentElement;
         if (!parent) return NodeFilter.FILTER_REJECT;
         if (parent.closest(blocked)) return NodeFilter.FILTER_REJECT;
-        return /Bitchat/.test(node.nodeValue || "") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        return /bitchat/i.test(node.nodeValue || "") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
       },
     });
     const nodes = [];
     let guard = 0;
     while (walker.nextNode() && guard++ < 3000) nodes.push(walker.currentNode);
-    for (const node of nodes) node.nodeValue = (node.nodeValue || "").replace(/Bitchat/g, "Chat");
+    for (const node of nodes) node.nodeValue = (node.nodeValue || "").replace(/bitchat/gi, "Chat");
     for (const el of root.querySelectorAll(attrSelector)) {
       if (el.closest(blocked)) continue;
       for (const attr of ["title", "aria-label", "placeholder"]) {
         const value = el.getAttribute(attr);
-        if (value && value.includes("Bitchat")) el.setAttribute(attr, value.replace(/Bitchat/g, "Chat"));
+        if (value && /bitchat/i.test(value)) el.setAttribute(attr, value.replace(/bitchat/gi, "Chat"));
       }
     }
   }
-  if (document.title.includes("Bitchat")) document.title = document.title.replace(/Bitchat/g, "Chat");
+  if (/bitchat/i.test(document.title)) document.title = document.title.replace(/bitchat/gi, "Chat");
 }
 
 function maintainCallControls() {
@@ -3731,8 +3732,6 @@ function knownBetterHandle(handle) {
   return false;
 }
 
-const KNOWN_VISUAL_CLIENTS = new Set(["agnostr", "glub.chat", "glubchat", "glub", "nymchat", "nym"]);
-
 function markRowClientLabels(row, ev) {
   if (!(row instanceof HTMLElement) || !ev) return;
   const author = row.querySelector(".ag-msg-author");
@@ -3740,15 +3739,11 @@ function markRowClientLabels(row, ev) {
   const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
   const ownMessage = !!ev.pubkey && String(ev.pubkey).toLowerCase() === ownPubkey;
   const better = isBetterClient(ev) || (ownMessage && ownBetterClient());
-  const client = String(getTagValue(ev.tags, "client") || "").trim().slice(0, 32);
-  const clientKey = client.toLowerCase();
-  const spoofed = better && !!client && !isBetterClientName(client);
-  const showClient = !better && !!client && !KNOWN_VISUAL_CLIENTS.has(clientKey);
   setBetterName(author, better);
-  author.classList.toggle("ba-better-spoof", spoofed);
-  author.classList.toggle("ba-client-name", showClient);
-  if (spoofed || showClient) author.dataset.baClient = client;
-  else delete author.dataset.baClient;
+  // A plaque says BA or nothing. Never append another client's name: that made
+  // ordinary users of other clients look like spoofed Better Agnostr accounts.
+  author.classList.remove("ba-better-spoof", "ba-client-name");
+  delete author.dataset.baClient;
 }
 
 function clientPillDisplay(raw) {
@@ -3802,7 +3797,12 @@ function markBetterClients() {
     const handle = row.querySelector(".ag-users-name")?.textContent?.trim().toLowerCase() || "";
     const own = !!ownPubkey && handle.endsWith(`#${ownPubkey.slice(-4)}`);
     const better = knownBetterHandle(handle) || (own && ownBetter);
-    setBetterName(row.querySelector(".ag-users-name"), better);
+    const nameEl = row.querySelector(".ag-users-name");
+    setBetterName(nameEl, better);
+    if (nameEl instanceof HTMLElement) {
+      nameEl.classList.remove("ba-better-spoof", "ba-client-name");
+      delete nameEl.dataset.baClient;
+    }
   }
   for (const pop of document.querySelectorAll(".ag-quick-profile-popover")) {
     setBetterName(pop.querySelector(".ag-qp-display-name"), ownBetter);
@@ -3816,6 +3816,10 @@ function markBetterClients() {
     const label = (nameEl?.textContent || "").replace(/\s+/g, "").toLowerCase();
     const better = (isSelf && ownBetter) || knownBetterHandle(label);
     setBetterName(nameEl, better);
+    if (nameEl instanceof HTMLElement) {
+      nameEl.classList.remove("ba-better-spoof", "ba-client-name");
+      delete nameEl.dataset.baClient;
+    }
     syncPeerClientPill(modal);
   }
   for (const title of document.querySelectorAll(".ag-sheet-hero-title")) {
@@ -4910,7 +4914,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.2.0";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.2.1";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4927,7 +4931,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.2.0"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.2.1"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,

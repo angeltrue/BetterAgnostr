@@ -205,7 +205,12 @@ export function normalizeSettings(raw) {
   s.sounds.events.calls = s.sounds.events.calls === true;
 
   // fonts
-  s.font.family = String(s.font.family || "default");
+  const fontIds = new Set([
+    "default", "inter", "jetbrains", "plex", "atkinson", "lexend",
+    "source-serif", "plex-serif", "merriweather", "crimson", "spectral", "noto-serif", "baskerville",
+    "noto", "source", "fira", "ubuntu", "custom",
+  ]);
+  s.font.family = fontIds.has(s.font.family) ? s.font.family : "default";
   s.font.customFamily = String(s.font.customFamily || "").trim().slice(0, 80);
   s.font.customUrl = String(s.font.customUrl || "").trim().slice(0, 500);
   s.actions.custom = String(s.actions.custom || "boops").trim().slice(0, 60) || "boops";

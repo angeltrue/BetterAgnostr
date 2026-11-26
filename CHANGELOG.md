@@ -2,6 +2,18 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.2.1 — Plaques, Chrome rainbow, fonts, warnings
+
+- Plaques now show only **BA** or nothing; client names are no longer appended, and ordinary users of other clients no longer get a client-name plaque in chat.
+- Hardened rainbow painting in Chromium with descendant fill enforcement and background-position layer promotion.
+- Renamed every visible Bitchat label in the UI to **Chat**.
+- Replaced Playfair Display, Cormorant Garamond, Lora, Literata, Fraunces, and Instrument Serif with Source Serif 4, IBM Plex Serif, Merriweather, Crimson Pro, Spectral, and Noto Serif.
+- Kept Libre Baskerville.
+- Migrated removed font choices to the default.
+- Made README warnings much larger, louder, and deliberately obnoxious while keeping the rest compressed.
+- Left aurora unchanged.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.2.0 — Sonar rings, rainbow selection, client plaques, Alerts
 
 - Rebuilt sonar wavefronts as SVG circles animated by radius, removing the clipped-border cross while keeping the CRT scanlines.

@@ -34,8 +34,17 @@
 	-webkit-text-fill-color: transparent;
 	color: transparent;
 	animation: fmtRainbow 6s linear infinite;
+	will-change: background-position;
 	text-shadow: var(--ba-rainbow-shadow, none);
 	text-decoration-color: #ff8fb0;
+}
+
+/* Some Chromium builds stop painting a clipped gradient when a descendant span
+   has its own fill. Keep every non-emoji descendant transparent so the parent's
+   gradient remains the only paint. Emoji are excluded and keep their own colour. */
+.fmtRainbow :not(.fmtEmoji),
+[data-ba-line-rainbow="1"] :not(.fmtEmoji) {
+	-webkit-text-fill-color: transparent;
 }
 @keyframes fmtRainbow {
 	to {
@@ -66,6 +75,7 @@
 	-webkit-text-fill-color: transparent;
 	color: transparent;
 	animation: fmtRainbow 6s linear infinite;
+	will-change: background-position;
 	text-shadow: var(--ba-rainbow-shadow-flair, none);
 	text-decoration-color: #ff90b0;
 }
