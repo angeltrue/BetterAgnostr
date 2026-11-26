@@ -2,6 +2,16 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.2.2 — action menu and performance
+
+- Restored the message action toolbar to its previous fixed top-right position; Agnostr's new flex-flow placement no longer applies.
+- Added a row-decoration signature fast path so intact rows are not re-decorated on every enhance pass.
+- Targeted repairs now run only for rows missing a BA class, rich-text state, flair layer, or JSON button.
+- Row hover/action class changes no longer schedule a full page enhance when the row is intact.
+- Preserved immediate rainbow/rich-text repair on selection.
+- Removed the whole-conversation pane from the Bitchat-to-Chat text scan.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.2.1 — Plaques, Chrome rainbow, fonts, warnings
 
 - Plaques now show only **BA** or nothing; client names are no longer appended, and ordinary users of other clients no longer get a client-name plaque in chat.

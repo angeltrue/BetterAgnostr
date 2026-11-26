@@ -1415,3 +1415,25 @@ html.ba-hide-timestamps .ag-msg-row .ag-msg-gutter-time {
 html.ba-hide-notification-button .ag-notification-shortcut {
   display: none !important;
 }
+
+/* Agnostr now places the message action toolbar in the row's flex flow next to
+   the text. Restore the previous fixed top-right overlay so it does not move with
+   message width, wrapping, or avatars. */
+.ag-msg-row > .ag-msg-actions {
+  position: absolute;
+  top: -13px;
+  right: 20px;
+  bottom: auto;
+  left: auto;
+  flex: none;
+  block-size: auto;
+  margin: 0;
+  align-self: auto;
+}
+
+@media (max-width: 867px) {
+  .ag-msg-row > .ag-msg-actions {
+    top: -16px;
+    right: 12px;
+  }
+}

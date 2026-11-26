@@ -1479,7 +1479,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.2.1";
+  const version = manifest.version || "1.2.2";
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -3362,7 +3362,7 @@ function replaceBitchatText() {
   const blocked = ".ag-msg-rich, .ag-msg-content, .ag-chat-row-preview, .ag-msg-preview, .ag-conv-preview, .ag-composer, textarea, input, pre, code, script, style";
   const attrSelector = '[title*="bitchat" i], [aria-label*="bitchat" i], [placeholder*="bitchat" i]';
   const roots = document.querySelectorAll(
-    ".ag-app-rail, .ag-suite-popover, .ag-header, .ag-conv-header, .ag-conv-pane, .ag-srv-discord-pane, .ag-mobile-tabbar, .ag-settings-modal, .ag-peer-modal, .ag-sheet, .ag-quick-profile-popover, .ag-ctx-menu",
+    ".ag-app-rail, .ag-suite-popover, .ag-header, .ag-conv-header, .ag-srv-discord-pane, .ag-mobile-tabbar, .ag-settings-modal, .ag-peer-modal, .ag-sheet, .ag-quick-profile-popover, .ag-ctx-menu",
   );
   for (const root of roots) {
     if (!(root instanceof HTMLElement)) continue;
@@ -3619,16 +3619,40 @@ function ensureToolbars() {
 // data-* attributes survive. The normal enhance pass is deliberately debounced,
 // which leaves a visible flash of unformatted text. Repair the one affected row
 // synchronously from the mutation observer instead, before the next paint.
+function rowDecorationIntact(row, ev) {
+  if (!row.querySelector(".ba-json-btn, .ba-row-json-btn")) return false;
+  if (row.dataset.baFlair) {
+    if (!row.classList.contains("flair")) return false;
+    if (!row.querySelector(":scope > .ba-flair-layer")) return false;
+  }
+  const rich = row.querySelector(".ag-msg-rich");
+  const author = row.querySelector(".ag-msg-author");
+  for (const el of [author, rich]) {
+    if (!(el instanceof HTMLElement)) continue;
+    if (el.dataset.baLineRainbow === "1" && !el.classList.contains("fmtRainbow")) return false;
+    const expected = String(el.dataset.baLineClasses || "").split(" ").filter(Boolean);
+    if (expected.some((cls) => !el.classList.contains(cls))) return false;
+  }
+  const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
+  const ownMessage = !!ev.pubkey && String(ev.pubkey).toLowerCase() === ownPubkey;
+  const expectedBetter = isBetterClient(ev) || (ownMessage && ownBetterClient());
+  if (author && expectedBetter && !author.classList.contains("ba-better-name")) return false;
+  if (row.dataset.baRichId && (!rich || rich.dataset.baRich !== row.dataset.baRichId)) return false;
+  return true;
+}
+
 function repairRowNow(row) {
-  if (!(row instanceof HTMLElement)) return;
-  if (state.repairingRows.has(row)) return;
-  if (!row.dataset.baDecorated && !row.dataset.baFlair && !row.querySelector(".fmtRainbow, [data-ba-line-rainbow]")) return;
+  if (!(row instanceof HTMLElement)) return false;
+  if (state.repairingRows.has(row)) return true;
+  if (!row.dataset.baDecorated && !row.dataset.baFlair && !row.querySelector(".fmtRainbow, [data-ba-line-rainbow]")) return false;
   const id = row.id?.startsWith("msg-") ? row.id.slice(4) : "";
-  if (!id) return;
+  if (!id) return false;
   const ev = eventById(id);
-  if (!ev) return;
+  if (!ev) return false;
+  if (rowDecorationIntact(row, ev)) return true;
   state.repairingRows.add(row);
   try {
+    ensureRowButtons(row, id);
     markRowClientLabels(row, ev);
     decorateRow(row, ev);
     const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
@@ -3639,6 +3663,7 @@ function repairRowNow(row) {
     // trigger another repair, and another, forever.
     window.setTimeout(() => state.repairingRows.delete(row), 0);
   }
+  return true;
 }
 
 function decorateRows() {
@@ -3663,13 +3688,10 @@ function decorateRows() {
       }
       continue;
     }
-    markRowClientLabels(row, ev);
     const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
     const signature = `${id}:${state.settingsEpoch}:${ownPubkey}`;
-    // Deliberately decorate every pass. React may rewrite a row's className (when the
-    // action menu opens, for example) without touching the data-* attributes BA wrote,
-    // so a signature match is not proof that the flair and rainbow are still on screen.
-    // Each apply* helper has its own cheap idempotence check for the common case.
+    if (row.dataset.baDecorated === signature && rowDecorationIntact(row, ev)) continue;
+    markRowClientLabels(row, ev);
     decorateRow(row, ev);
     row.dataset.baDecorated = signature;
   }
@@ -3996,6 +4018,17 @@ function applyLineClasses(el, prefix, vis, row) {
     delete el.dataset.obfStatic;
     obfBursts.delete(el);
   }
+  // Remember the exact class set this element should have. React can replace
+  // className without touching data-* attributes; this lets the fast repair path
+  // notice a stripped line style without recomputing the whole row.
+  const activeLineClasses = [];
+  for (const cls of classes) {
+    if (el.classList.contains(cls)) activeLineClasses.push(cls);
+  }
+  if (vis?.rainbow) activeLineClasses.push("fmtRainbow");
+  if (vis?.obf) activeLineClasses.push("fmtObf");
+  if (activeLineClasses.length) el.dataset.baLineClasses = activeLineClasses.join(" ");
+  else delete el.dataset.baLineClasses;
   if (!vis) return;
   const ns = prefix === "ba-line-name" ? "name" : "msg";
   if (vis.color) row.style.setProperty(`--ba-line-${ns}-color`, vis.color);
@@ -4122,6 +4155,7 @@ function applyRichText(row, ev, meta) {
   if (!complex && normalizedText === normalizedContent) {
     root.innerHTML = renderFormatHtml(rich);
     root.dataset.baRich = ev.id;
+    row.dataset.baRichId = ev.id;
     state.richApplied.set(root, { id: ev.id, html: root.innerHTML });
     ensureRichObserver(root);
     return;
@@ -4177,6 +4211,7 @@ function applyRichText(row, ev, meta) {
   }
   if (changed) {
     root.dataset.baRich = ev.id;
+    row.dataset.baRichId = ev.id;
     state.richApplied.set(root, { id: ev.id, html: root.innerHTML });
     ensureRichObserver(root);
   }
@@ -4206,6 +4241,7 @@ function restoreRich(row) {
   const root = row.querySelector(".ag-msg-rich");
   if (!root) return;
   state.richApplied.delete(root);
+  delete row.dataset.baRichId;
   const observer = state.richObservers.get(root);
   if (observer) {
     observer.disconnect();
@@ -4914,7 +4950,7 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.2.1";
+  const extensionVersion = api.runtime.getManifest?.().version || "1.2.2";
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
@@ -4931,7 +4967,7 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.2.1"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || "1.2.2"}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
     `sign mode: ${status.signMode}`,
@@ -4989,9 +5025,10 @@ function observePage() {
         const target = record.target;
         const row = target instanceof Element ? target.closest(".ag-msg-row") : null;
         if (row) {
-          delete row.dataset.baDecorated;
-          repairRowNow(row);
-          relevant = true;
+          if (!repairRowNow(row)) {
+            delete row.dataset.baDecorated;
+            relevant = true;
+          }
         }
         for (const node of [...record.addedNodes, ...record.removedNodes]) {
           if (!(node instanceof Element)) continue;
@@ -5010,7 +5047,11 @@ function observePage() {
         const el = record.target;
         if (el instanceof Element) {
           const row = el.closest(".ag-msg-row");
-          if (row) repairRowNow(row);
+          if (row && repairRowNow(row)) {
+            // The row was intact or has just been repaired. Hover/action class
+            // churn does not need a second, full enhance pass.
+            continue;
+          }
         }
         if (
           el === document.documentElement ||
