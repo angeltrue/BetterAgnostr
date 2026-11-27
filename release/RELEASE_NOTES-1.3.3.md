@@ -4,9 +4,9 @@
 
 ## Flairs
 
-- Flaired layers now extend past the message row and fade over a wider band into the gap between messages, instead of clipping animated particles, curtains, embers, rain, and shooting stars at the row edge.
-- The actual row remains fully covered; only the space outside it fades.
-- Shooting-star positioning was adjusted for the taller flair layer.
+- Widened the flair edge fade so animated particles, curtains, embers, rain, and shooting stars taper out instead of being clipped mid-animation at the row edge.
+- The stars card keeps its dark edge while its animated effects fade softly.
+- Shooting-star positioning was adjusted for the flair layer.
 - Static row-to-row seam fixes from 1.3.2 remain in place.
 
 ## Notes
