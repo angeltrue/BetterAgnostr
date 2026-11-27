@@ -34,9 +34,9 @@ A browser extension for **agnostr.com**: line and flair studio, client tags, pri
 
 - Line templates, `&` colour codes, rich text, and 14 flair effects.
 - Glub/Bright rainbow toggle in Appearance.
-- Client-tag leave/spoof/strip policies and profile client pills when a NIP-07 provider is available.
+- Client-tag leave/spoof/strip policies and profile client pills.
 - Privacy scrubber, review-before-sign, teleport/timestamp/voice-memo hiding, and call blocking.
-- No built-in signer and no React-internal signer discovery. Outgoing rewrites use the page's standard NIP-07 provider only.
+- Agnostr signer hook with bounded discovery and a local-key fallback; NIP-07 is also supported for extension signers.
 - 12 Better Agnostr chimes, UI clicks, volume, and chime triggers.
 - JSON event viewer with tags, signatures, relay frames, and Glub previews.
 - 12 Glub themes, custom CSS, and bundled fonts.
@@ -46,7 +46,7 @@ A browser extension for **agnostr.com**: line and flair studio, client tags, pri
 
 1. Run `npm install` and `node build.mjs`.
 2. Firefox: open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → select `dist/manifest.json`.
-3. Chromium 148+: open `chrome://extensions`, enable **Developer mode**, and load `release/better-agnostr-1.3.0-chromium.zip` unpacked.
+3. Chromium 148+: open `chrome://extensions`, enable **Developer mode**, and load `release/better-agnostr-1.3.1-chromium.zip` unpacked.
 4. Open or reload <https://agnostr.com/>.
 
 Firefox 128 or newer is required. The unsigned XPI is in `release/`; permanent Firefox installation requires AMO signing.
@@ -65,7 +65,7 @@ Open **Agnostr Settings → Better Agnostr**. On mobile: **Apps → Settings**.
 - **Privacy & Trust → Better Agnostr:** tag scrubbing, review before signing, Locate Me, timestamps, teleport, voice memos, and calls.
 - **Notifications:** native notification controls plus Better Agnostr chimes and clicks. The new Alerts shortcut opens the same pane with those controls inline.
 
-Outgoing chat events are rewritten **before signing** when the page exposes a standard `window.nostr` NIP-07 provider, so signatures stay valid. Better Agnostr no longer implements or discovers Agnostr's internal signer; with a native signer and no NIP-07 provider, client-tag, template, tracking, tag, and review transforms stay inactive until Agnostr exposes a supported signing hook. Sealed DM and mesh events are never rewritten.
+Outgoing chat events are rewritten **before signing** through Agnostr's own signer, the local-key fallback, or a standard `window.nostr` NIP-07 provider. Discovery is capped and backs off instead of walking React at sub-second intervals forever. If a signed frame still needs a last-mile rewrite, Better Agnostr re-signs it with the matching local/NIP-07 key; otherwise it blocks the send rather than leaking the original. Sealed DM and mesh events are never rewritten.
 
 ## Build
 

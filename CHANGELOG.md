@@ -2,6 +2,18 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.1 — signer restoration and notification/UI fixes
+
+- Restored Agnostr signer integration and the local-key fallback, with bounded discovery, exponential backoff, cached instances, and fail-closed handling when no signer can be reached. Teleport-tag messages can be stripped and re-signed again instead of being blocked.
+- Added NIP-07 re-signing as a second last-mile fallback when a provider matches the event pubkey.
+- Stopped call-blocked notices from repeating on every signal; repeated BA notices now share a cooldown.
+- Restyled Better Agnostr toasts to match Agnostr's native toast layout and icon treatment.
+- Removed Agnostr's transient “Image Safety Classifier ready / Running locally via WASM” toast.
+- Fixed the event viewer’s scroll container so JSON, tags, and previews scroll inside the dialog.
+- Broadened the Bitchat → Chat label adapter across new rail, drawer, room-switcher, call, and toast surfaces, with a char-data/attribute observer.
+- Prevented readable serif fonts from clipping descenders in the left rail (Agora, Agwallet) and mobile labels.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.0 — signer removal and robustness pass
 
 - Removed Better Agnostr's internal signer implementation: no React-fiber discovery, identity-manager patching, local-key lookup, or re-signing. A NIP-07 provider is the only pre-sign rewrite path.

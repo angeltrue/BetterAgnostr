@@ -1447,3 +1447,19 @@ html.ba-active .ag-msg-row > .ag-msg-content > .ag-msg-actions {
     inset-inline-end: 12px !important;
   }
 }
+
+
+/* Readable serif fonts have deeper descenders than Agnostr's compact rail
+   labels allow. Keep "Agora" and "Agwallet" from clipping their g. */
+html.ba-active .ag-rail-app-label,
+html.ba-active .ag-mtab-label {
+  line-height: 1.35 !important;
+  overflow: visible !important;
+  padding-block: 1px 2px !important;
+  max-width: 58px !important;
+}
+
+html.ba-active .ag-rail-app-tile,
+html.ba-active .ag-mtab-btn {
+  min-height: 50px !important;
+}

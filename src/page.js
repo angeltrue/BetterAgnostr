@@ -1,5 +1,8 @@
-import { verifyEvent } from "nostr-tools/pure";
-import { npubEncode, noteEncode, neventEncode } from "nostr-tools/nip19";
+import { finalizeEvent, getPublicKey, verifyEvent } from "nostr-tools/pure";
+import { decode, npubEncode, noteEncode, neventEncode } from "nostr-tools/nip19";
+import { hmac } from "@noble/hashes/hmac";
+import { sha256 } from "@noble/hashes/sha256";
+import { concatBytes, hexToBytes, utf8ToBytes } from "@noble/hashes/utils";
 import { flairName } from "./lib/glub-flair.js";
 import {
   CHAT_KINDS,
@@ -46,6 +49,14 @@ import { VERSION } from "./lib/version.js";
     logTimer: null,
     sockets: new Map(),
     relays: new Map(),
+    signerHooked: false,
+    signerInstance: null,
+    signerMode: "auto",
+    signerScanTimer: null,
+    signerScanDelay: 500,
+    signerWatchStarted: false,
+    signerNoticeShown: false,
+    noticeTimes: new Map(),
     nip07Patched: false,
     nip07Provider: null,
     nip07IdentityAt: 0,
@@ -70,6 +81,7 @@ import { VERSION } from "./lib/version.js";
 
   const preparedEvents = new WeakSet();
   const nip07Wrappers = new WeakMap();
+  const signerPatches = new Map();
 
   // Better Agnostr owns message chimes while it is active. Leave native
   // notifications, ringtone, and vibration intact.
@@ -122,6 +134,18 @@ import { VERSION } from "./lib/version.js";
     post("notice", { level, title, detail });
   }
 
+  function noticeThrottled(key, level, title, detail = "", cooldownMs = 15000) {
+    const now = Date.now();
+    const last = Number(state.noticeTimes.get(key) || 0);
+    if (now - last < cooldownMs) return;
+    state.noticeTimes.set(key, now);
+    if (state.noticeTimes.size > 50) {
+      const first = state.noticeTimes.keys().next().value;
+      if (first) state.noticeTimes.delete(first);
+    }
+    notice(level, title, detail);
+  }
+
   function setConfig(settings) {
     const old = state.settings;
     state.settings = normalizeSettings(mergeSettings(state.settings, settings || {}));
@@ -130,6 +154,7 @@ import { VERSION } from "./lib/version.js";
     state.active = enabled;
     if (enabled) {
       window.WebSocket = BetterWebSocket;
+      if (state.started) kickSignerScan();
     } else {
       window.WebSocket = NativeWebSocket;
       if (wasActive) stopActiveWork();
@@ -765,28 +790,407 @@ import { VERSION } from "./lib/version.js";
         kind: ev.kind,
         summary: "outgoing call signal blocked by Better Agnostr",
       });
-      notice("warning", "Call blocked", "Calling is disabled in Better Agnostr privacy settings.");
+      noticeThrottled(
+        "call-blocked",
+        "warning",
+        "Call blocked",
+        "Calling is disabled in Better Agnostr privacy settings.",
+        20000,
+      );
       return;
     }
 
-    // Signed frames cannot be rewritten safely without the app's signer. The
-    // pre-sign NIP-07 adapter is the only rewrite path; if a teleport tag still
-    // reaches this point, block the event rather than re-signing it here.
+    // Last-mile guard for a signing path that bypasses the pre-sign hook. If the
+    // local key belongs to this event, strip the teleport tag and re-sign it.
     if (state.settings.privacy.omitTeleport && hasTeleportTag(ev.tags)) {
+      const cleaned = { ...ev, tags: stripTeleportTags(ev.tags) };
+      (async () => {
+        let prepared;
+        try {
+          prepared = await prepareOutgoing(cleaned, { source: "socket-teleport" });
+        } catch (err) {
+          noticeThrottled(
+            "teleport-blocked",
+            "error",
+            "Teleport tag blocked",
+            err instanceof Error ? err.message : String(err),
+            20000,
+          );
+          return;
+        }
+        const resigned = await resignPrepared(prepared);
+        if (resigned) {
+          sendResigned(ws, url, ev, resigned);
+          return;
+        }
+        pushFrameLog({
+          dir: "out",
+          relay: url,
+          type: "BLOCKED_TELEPORT",
+          eventId: ev.id,
+          kind: ev.kind,
+          summary: "outgoing teleport tag blocked by Better Agnostr",
+        });
+        noticeThrottled(
+          "teleport-blocked",
+          "warning",
+          "Teleport tag blocked",
+          "The message was not sent because the signer could not remove the teleport tag before signing.",
+          20000,
+        );
+      })();
+      return;
+    }
+
+    if (state.signerHooked) {
+      handleOutgoingFrame(data, url);
+      sendRaw(ws, data);
+      return;
+    }
+
+    // Fallback when the signer hook could not be attached. The event is already
+    // signed, so only send it unchanged if no BA transform is needed; otherwise
+    // re-sign with the matching local key or fail closed.
+    (async () => {
+      let prepared;
+      try {
+        prepared = await prepareOutgoing(ev, { source: "socket-fallback" });
+      } catch (err) {
+        noticeThrottled(
+          "outgoing-blocked",
+          "error",
+          "Outgoing event blocked",
+          err instanceof Error ? err.message : String(err),
+          10000,
+        );
+        return;
+      }
+      if (!state.active) {
+        sendRaw(ws, data);
+        return;
+      }
+      if (sameOutgoing(ev, prepared)) {
+        handleOutgoingFrame(data, url);
+        sendRaw(ws, data);
+        return;
+      }
+      const signed = await resignPrepared(prepared);
+      if (signed) {
+        sendResigned(ws, url, ev, signed);
+        return;
+      }
       pushFrameLog({
         dir: "out",
         relay: url,
-        type: "BLOCKED_TELEPORT",
+        type: "BLOCKED_NO_SIGNER",
         eventId: ev.id,
         kind: ev.kind,
-        summary: "outgoing teleport tag blocked by Better Agnostr",
+        summary: "outgoing event was blocked because the signer was unavailable",
       });
-      notice("warning", "Teleport tag blocked", "The message was not sent because the teleport tag could not be removed before signing.");
+      noticeThrottled(
+        "no-signer",
+        "error",
+        "Could not send message",
+        "Better Agnostr could not apply its outgoing changes because the signer was unavailable. Reload the page and try again.",
+        15000,
+      );
+    })();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Agnostr signer adapter
+  // ---------------------------------------------------------------------------
+  //
+  // Agnostr keeps its IdentityManager inside React. There is no public hook, so
+  // discovery still walks the React internals, but only until it finds a signer
+  // and with backoff afterwards. The wrapper is the only place that rewrites an
+  // event before the app signs it; local-key re-signing is a fallback for the
+  // last-mile socket path.
+
+  function objectLooksLikeIdentityManager(obj) {
+    if (!obj || typeof obj !== "object") return false;
+    try {
+      return (
+        typeof obj.signEvent === "function" &&
+        typeof obj.signEventWithMaterial === "function" &&
+        typeof obj.getMasterKeyMaterial === "function"
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function deepFindIdentityManager(root, depth = 4, seen = new Set()) {
+    if (!root || (typeof root !== "object" && typeof root !== "function")) return null;
+    if (depth < 0 || seen.has(root)) return null;
+    seen.add(root);
+    if (objectLooksLikeIdentityManager(root)) return root;
+    if (root instanceof Node || root === window || root === document) return null;
+    if (root instanceof Map || root instanceof Set) {
+      let i = 0;
+      for (const value of root.values()) {
+        if (i++ > 40) break;
+        const found = deepFindIdentityManager(value, depth - 1, seen);
+        if (found) return found;
+      }
+      return null;
+    }
+    let keys = [];
+    try {
+      keys = Object.keys(root).slice(0, 80);
+    } catch {
+      return null;
+    }
+    for (const key of keys) {
+      if (key.startsWith("__") || key === "window" || key === "document" || key === "parent" || key === "ownerDocument") continue;
+      let value;
+      try {
+        value = root[key];
+      } catch {
+        continue;
+      }
+      const found = deepFindIdentityManager(value, depth - 1, seen);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function inspectFiber(fiber, seen, depth) {
+    if (!fiber || seen.has(fiber) || depth > 24) return null;
+    seen.add(fiber);
+    const props = fiber.memoizedProps;
+    if (props && typeof props === "object") {
+      for (const value of Object.values(props)) {
+        if (objectLooksLikeIdentityManager(value)) return value;
+        if (value && typeof value === "object") {
+          const nested = deepFindIdentityManager(value, 3, new Set());
+          if (nested) return nested;
+        }
+      }
+    }
+    const stateNode = fiber.stateNode;
+    if (stateNode && typeof stateNode === "object") {
+      if (objectLooksLikeIdentityManager(stateNode)) return stateNode;
+      const nested = deepFindIdentityManager(stateNode, 3, new Set());
+      if (nested) return nested;
+    }
+    let hook = fiber.memoizedState;
+    let guard = 0;
+    while (hook && guard < 80) {
+      guard += 1;
+      const found = deepFindIdentityManager(hook.memoizedState, 5, new Set());
+      if (found) return found;
+      hook = hook.next;
+    }
+    return inspectFiber(fiber.child, seen, depth + 1) || inspectFiber(fiber.sibling, seen, depth + 1);
+  }
+
+  function findIdentityManager() {
+    if (state.signerInstance && objectLooksLikeIdentityManager(state.signerInstance)) return state.signerInstance;
+    const containers = [];
+    const root = document.getElementById("root");
+    if (root) containers.push(root);
+    for (const node of document.querySelectorAll("body > div, body > main")) {
+      if (containers.length > 6) break;
+      containers.push(node);
+    }
+    for (const container of containers) {
+      try {
+        for (const key of Object.keys(container)) {
+          if (key.startsWith("__reactContainer$")) {
+            const found = inspectFiber(container[key], new Set(), 0);
+            if (found) return found;
+          }
+          if (key.startsWith("__reactFiber$")) {
+            let fiber = container[key];
+            let guard = 0;
+            while (fiber && guard++ < 200) {
+              if (fiber.return === null) {
+                const found = inspectFiber(fiber, new Set(), 0);
+                if (found) return found;
+              }
+              fiber = fiber.return;
+            }
+          }
+        }
+      } catch {}
+    }
+    return null;
+  }
+
+  function currentSignMode(instance) {
+    if (instance?.getSignMode) {
+      try {
+        const mode = instance.getSignMode();
+        if (mode === "auto" || mode === "local" || mode === "extension") return mode;
+      } catch {}
+    }
+    try {
+      const raw = localStorage.getItem("agnostr:v2:sign_mode");
+      if (raw === "auto" || raw === "local" || raw === "extension") return raw;
+    } catch {}
+    return "auto";
+  }
+
+  function signerPubkey(instance) {
+    try {
+      const material = instance?.getMasterKeyMaterial?.();
+      const pubkey = String(material?.pubkey || "").toLowerCase();
+      return /^[0-9a-f]{64}$/.test(pubkey) ? pubkey : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function patchIdentityManager(instance) {
+    if (!instance) return false;
+    const target = Object.prototype.hasOwnProperty.call(instance, "signEventWithMaterial")
+      ? instance
+      : Object.getPrototypeOf(instance);
+    if (!target || typeof target.signEventWithMaterial !== "function") return false;
+    state.signerInstance = instance;
+    state.signerMode = currentSignMode(instance);
+    const pubkey = signerPubkey(instance);
+    if (pubkey) {
+      state.pubkey = pubkey;
+      try {
+        state.npub = npubEncode(pubkey);
+      } catch {
+        state.npub = "";
+      }
+    }
+    const existing = signerPatches.get(target);
+    if (existing && target.signEventWithMaterial === existing.wrapped) {
+      state.signerHooked = true;
+      state.signMode = state.signerMode;
+      publishStatus();
+      return true;
+    }
+    const original = target.signEventWithMaterial;
+    const wrapped = async function (event, material) {
+      const prepared = await prepareOutgoing(event, { source: "signer" });
+      const signed = await original.call(this, prepared, material);
+      if (isValidEvent(signed)) {
+        const pubkey = String(signed.pubkey || "").toLowerCase();
+        if (pubkey && pubkey !== state.pubkey) {
+          state.pubkey = pubkey;
+          try {
+            state.npub = npubEncode(pubkey);
+          } catch {
+            state.npub = "";
+          }
+        }
+        rememberEvent(signed, { dir: "signed", relay: "signer" });
+      }
+      return signed;
+    };
+    try {
+      target.signEventWithMaterial = wrapped;
+      if (target.signEventWithMaterial !== wrapped) {
+        Object.defineProperty(target, "signEventWithMaterial", {
+          value: wrapped,
+          configurable: true,
+          writable: true,
+        });
+      }
+      signerPatches.set(target, { original, wrapped });
+      state.signerHooked = true;
+      state.signMode = state.signerMode;
+      publishStatus();
+      if (!state.signerNoticeShown) {
+        state.signerNoticeShown = true;
+        notice("success", "Signer attached", "Outgoing event tools are active.");
+      }
+      return true;
+    } catch (err) {
+      state.signerHooked = false;
+      noticeThrottled(
+        "signer-patch",
+        "warning",
+        "Could not attach to signer",
+        err instanceof Error ? err.message : String(err),
+        60000,
+      );
+      return false;
+    }
+  }
+
+  function unpatchSigner() {
+    for (const [target, record] of signerPatches) {
+      try {
+        if (target.signEventWithMaterial === record.wrapped) target.signEventWithMaterial = record.original;
+      } catch {}
+    }
+    signerPatches.clear();
+    state.signerHooked = false;
+    state.signerInstance = null;
+    state.signerMode = "auto";
+    state.signMode = state.nip07Patched ? "nip-07" : "none";
+    if (!state.nip07Patched) {
+      state.pubkey = "";
+      state.npub = "";
+    }
+    publishStatus();
+  }
+
+  function scanSigner() {
+    if (state.signerInstance && objectLooksLikeIdentityManager(state.signerInstance)) {
+      patchIdentityManager(state.signerInstance);
+    } else {
+      state.signerHooked = false;
+      const found = findIdentityManager();
+      if (found) patchIdentityManager(found);
+    }
+    patchNip07();
+  }
+
+  function queueSignerScan(delayMs = 500) {
+    if (state.signerScanTimer !== null) return;
+    const delay = Math.max(250, Math.min(15000, Number(delayMs) || 500));
+    state.signerScanTimer = window.setTimeout(() => {
+      state.signerScanTimer = null;
+      scanSigner();
+      const next = state.signerHooked || state.nip07Patched
+        ? 15000
+        : Math.min(15000, Math.max(900, Math.round(state.signerScanDelay * 1.7)));
+      state.signerScanDelay = next;
+      queueSignerScan(next);
+    }, delay);
+  }
+
+  function startSignerWatch() {
+    if (state.signerWatchStarted) {
+      kickSignerScan();
       return;
     }
+    state.signerWatchStarted = true;
+    state.signerScanDelay = 500;
+    scanSigner();
+    queueSignerScan(500);
+  }
 
-    handleOutgoingFrame(data, url);
-    sendRaw(ws, data);
+  function kickSignerScan() {
+    if (!state.signerWatchStarted) {
+      startSignerWatch();
+      return;
+    }
+    if (state.signerScanTimer !== null) {
+      window.clearTimeout(state.signerScanTimer);
+      state.signerScanTimer = null;
+    }
+    state.signerScanDelay = 500;
+    scanSigner();
+    queueSignerScan(700);
+  }
+
+  function stopSignerWatch() {
+    if (state.signerScanTimer !== null) {
+      window.clearTimeout(state.signerScanTimer);
+      state.signerScanTimer = null;
+    }
+    state.signerWatchStarted = false;
+    state.signerScanDelay = 500;
+    unpatchSigner();
   }
 
   // ---------------------------------------------------------------------------
@@ -808,6 +1212,7 @@ import { VERSION } from "./lib/version.js";
   }
 
   async function refreshNip07Identity(provider) {
+    if (state.signerHooked) return;
     if (!provider || typeof provider.getPublicKey !== "function") return;
     const now = Date.now();
     if (now - state.nip07IdentityAt < 30000) return;
@@ -828,6 +1233,7 @@ import { VERSION } from "./lib/version.js";
 
   function clearNip07Identity() {
     state.nip07IdentityAt = 0;
+    if (state.signerHooked) return;
     if (!state.pubkey && !state.npub) return;
     state.pubkey = "";
     state.npub = "";
@@ -838,9 +1244,9 @@ import { VERSION } from "./lib/version.js";
     const provider = nip07Provider();
     if (!provider) {
       clearNip07Identity();
-      if (state.nip07Patched || state.signMode !== "none") {
+      if (state.nip07Patched || (!state.signerHooked && state.signMode !== "none")) {
         state.nip07Patched = false;
-        state.signMode = "none";
+        state.signMode = state.signerHooked ? state.signerMode : "none";
         publishStatus();
       }
       return false;
@@ -848,11 +1254,13 @@ import { VERSION } from "./lib/version.js";
     if (state.nip07Provider !== provider) {
       state.nip07Provider = provider;
       state.nip07IdentityAt = 0;
-      state.pubkey = "";
-      state.npub = "";
+      if (!state.signerHooked) {
+        state.pubkey = "";
+        state.npub = "";
+      }
     }
     state.nip07Patched = true;
-    state.signMode = "nip-07";
+    state.signMode = state.signerHooked ? state.signerMode : "nip-07";
     void refreshNip07Identity(provider);
     // A provider can be replaced by another extension after our wrapper lands.
     // Keep one wrapper per provider object and re-install it when a page swaps
@@ -889,7 +1297,7 @@ import { VERSION } from "./lib/version.js";
     if (provider) nip07Wrappers.delete(provider);
     state.nip07Provider = null;
     state.nip07Patched = false;
-    state.signMode = "none";
+    state.signMode = state.signerHooked ? state.signerMode : "none";
     clearNip07Identity();
   }
 
@@ -1132,6 +1540,159 @@ import { VERSION } from "./lib/version.js";
   }
 
   // ---------------------------------------------------------------------------
+  // Local key fallback signing
+  // ---------------------------------------------------------------------------
+  //
+  // Used only when the signer hook could not be attached. It never signs an
+  // event for a different pubkey, and it fails closed instead of sending an
+  // event whose privacy transforms could not be applied.
+
+  function readLocalJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function secretFromRaw(raw) {
+    if (!raw || typeof raw !== "string") return null;
+    const trimmed = raw.trim();
+    try {
+      if (trimmed.toLowerCase().startsWith("nsec1")) {
+        const decoded = decode(trimmed);
+        return decoded?.type === "nsec" && decoded.data instanceof Uint8Array ? decoded.data : null;
+      }
+      if (/^[0-9a-f]{64}$/i.test(trimmed)) {
+        const bytes = hexToBytes(trimmed.toLowerCase());
+        getPublicKey(bytes);
+        return bytes;
+      }
+    } catch {}
+    return null;
+  }
+
+  function localKeys() {
+    const signModeRaw = localStorage.getItem("agnostr:v2:sign_mode");
+    const signMode = signModeRaw === "local" || signModeRaw === "extension" || signModeRaw === "auto" ? signModeRaw : "auto";
+    const settings = readLocalJson("agnostr:v2:settings", {});
+    const perGeohashIdentity = !!settings.perGeohashIdentity;
+    let master = null;
+    if (signMode === "local") {
+      master = secretFromRaw(localStorage.getItem("agnostr:v2:local_secret") || "");
+    } else if (signMode === "auto") {
+      master = secretFromRaw(localStorage.getItem("agnostr:v2:device_seed") || "");
+    }
+    return { signMode, perGeohashIdentity, master };
+  }
+
+  function deriveGeohashSecret(seed, geohash) {
+    const normalized = String(geohash || "").trim().replace(/^#+/, "").toLowerCase();
+    const geo = utf8ToBytes(normalized);
+    for (let counter = 0; counter < 10; counter++) {
+      const info = new Uint8Array(geo.length + 4);
+      info.set(geo, 0);
+      new DataView(info.buffer).setUint32(geo.length, counter, false);
+      const candidate = hmac(sha256, seed, info);
+      try {
+        getPublicKey(candidate);
+        return candidate;
+      } catch {}
+    }
+    return sha256(concatBytes(seed, geo));
+  }
+
+  function keyForEvent(ev) {
+    const { signMode, perGeohashIdentity, master } = localKeys();
+    if (signMode === "extension" || !master) return null;
+    const geohash = getTagValue(ev.tags, "g");
+    if (signMode === "auto" && perGeohashIdentity && geohash) {
+      const derived = deriveGeohashSecret(master, geohash);
+      try {
+        if (getPublicKey(derived) === ev.pubkey) return derived;
+      } catch {}
+    }
+    try {
+      if (getPublicKey(master) === ev.pubkey) return master;
+    } catch {}
+    return null;
+  }
+
+  function resignEvent(ev) {
+    if (!ev || typeof ev !== "object") return null;
+    const key = keyForEvent(ev);
+    if (!key) return null;
+    try {
+      const unsigned = {
+        kind: ev.kind,
+        created_at: ev.created_at || Math.floor(Date.now() / 1000),
+        tags: cloneTags(ev.tags),
+        content: ev.content,
+      };
+      return finalizeEvent(unsigned, key);
+    } catch {
+      return null;
+    }
+  }
+
+  async function resignPrepared(prepared) {
+    const local = resignEvent(prepared);
+    if (local) return local;
+    const provider = nip07Provider();
+    if (!provider) return null;
+    const expected = String(prepared?.pubkey || "").toLowerCase();
+    if (!expected || (state.pubkey && expected !== state.pubkey)) return null;
+    try {
+      const signed = await provider.signEvent(prepared);
+      return isValidEvent(signed) && String(signed.pubkey || "").toLowerCase() === expected ? signed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function sameOutgoing(a, b) {
+    if (!a || !b) return false;
+    return (
+      a.kind === b.kind &&
+      a.created_at === b.created_at &&
+      a.content === b.content &&
+      JSON.stringify(a.tags || []) === JSON.stringify(b.tags || [])
+    );
+  }
+
+  function rememberAlias(from, to) {
+    if (!from || !to || from === to) return;
+    state.aliases.set(from, to);
+    state.aliasReverse.set(to, from);
+    if (state.aliases.size > 1000) {
+      const first = state.aliases.keys().next().value;
+      if (first) state.aliases.delete(first);
+    }
+    if (state.aliasReverse.size > 1000) {
+      const first = state.aliasReverse.keys().next().value;
+      if (first) state.aliasReverse.delete(first);
+    }
+    post("alias", { from, to });
+  }
+
+  function sendResigned(ws, url, original, signed) {
+    rememberAlias(original.id, signed.id);
+    sendRaw(ws, JSON.stringify(["EVENT", signed]));
+    rememberEvent(signed, { dir: "out", relay: url });
+    pushFrameLog({
+      dir: "out",
+      relay: url,
+      type: "EVENT",
+      eventId: signed.id,
+      kind: signed.kind,
+      event: signed,
+      aliasOf: original.id,
+      summary: summarizeEvent(signed),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Status
   // ---------------------------------------------------------------------------
 
@@ -1146,6 +1707,8 @@ import { VERSION } from "./lib/version.js";
       nickname = localStorage.getItem("agnostr:v2:nickname") || "";
     } catch {}
     post("status", {
+      signerHooked: state.signerHooked,
+      signerMode: state.signerMode,
       nip07Patched: state.nip07Patched,
       signMode: state.signMode,
       pubkey: state.pubkey,
@@ -1187,6 +1750,7 @@ import { VERSION } from "./lib/version.js";
       window.clearInterval(state.nip07Timer);
       state.nip07Timer = null;
     }
+    stopSignerWatch();
     unpatchNip07();
     for (const resolve of state.pending.values()) resolve(null);
     state.pending.clear();
@@ -1199,6 +1763,7 @@ import { VERSION } from "./lib/version.js";
     if (state.started || !state.active) return;
     state.started = true;
     startNip07Watch();
+    startSignerWatch();
     if (state.statusTimer === null) {
       state.statusTimer = window.setInterval(publishStatus, 2500);
     }
