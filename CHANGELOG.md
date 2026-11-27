@@ -2,6 +2,17 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.10 — performance hotfix
+
+- Removed the full-document Bitchat text sweep from every enhance pass. Chat labels are now handled by the targeted mutation adapter and a one-time startup pass.
+- Scoped Chat-label mutations to the rail, tabs, headers, drawers, settings, sheets, popovers and toasts instead of scanning message and composer text.
+- Merged the separate settings and People badge observers into the existing page observer, removing two whole-document MutationObservers.
+- People badge observation is child-list only and keeps its re-entrancy guard, eliminating the continuous character-data workload.
+- Throttled flair-join and star-density measurements so large flaired conversations no longer force layout work on every enhance.
+- Slowed the People/peer badge scan from 500 ms to 1.5 s; targeted repairs still run immediately.
+- Kept the bounded rain clip and existing flair behavior.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.9 — People badge loop hotfix
 
 - Fixed the People-list badge observer feedback loop: the inserted BA badge text was being read as part of the display handle, which made the observer remove and re-add the badge indefinitely and trigger Firefox's “slowing down Firefox” warning.
