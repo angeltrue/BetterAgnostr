@@ -37,7 +37,10 @@ async function refresh() {
   try {
     const res = await api.tabs.sendMessage(tab.id, { type: "getPageState" });
     const status = res?.status || {};
-    document.getElementById("rewriter").textContent = status.nip07Patched ? "nip-07" : "waiting";
+    const signer = document.getElementById("signer");
+    if (status.signerHooked) signer.textContent = status.signMode || "attached";
+    else if (status.nip07Patched) signer.textContent = "NIP-07";
+    else signer.textContent = "waiting";
     document.getElementById("build").textContent = res?.build ? res.build.slice(0, 10) : "not synced";
     document.getElementById("events").textContent = String(status.eventCount ?? "—");
   } catch {

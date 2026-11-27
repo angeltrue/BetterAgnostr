@@ -44,6 +44,7 @@ const NATIVE_SETTINGS_KEY = "agnostr:v2:settings";
 const NATIVE_SETTINGS_BACKUP = "betterAgnostr.nativeSettings.v1";
 const SETTINGS_BACKUP_KEY = "betterAgnostr.settings.backup.v1";
 const CHIME_LOCK_KEY = "betterAgnostr.lastChime.v1";
+const toastCooldowns = new Map();
 const NATIVE_SOUND_OWNERS_KEY = "betterAgnostr.nativeSoundOwners.v1";
 const NATIVE_SOUND_OWNER_TTL = 12 * 60 * 60 * 1000;
 const TAB_ID = (() => {
@@ -245,6 +246,8 @@ const state = {
   emojiCategory: "smileys",
   lastBetterClients: 0,
   betterClientsTimer: null,
+  lastBitchatReplace: 0,
+  bitchatTimer: null,
   lastCallMaintenance: 0,
   callMaintenanceTimer: null,
   settingsEpoch: 0,
@@ -612,6 +615,8 @@ function handlePageData(data) {
       state.status = data.payload || {};
       if (
         previous.pubkey !== state.status.pubkey ||
+        previous.signerHooked !== state.status.signerHooked ||
+        previous.signMode !== state.status.signMode ||
         previous.nip07Patched !== state.status.nip07Patched ||
         previous.eventCount !== state.status.eventCount
       ) {
@@ -1880,10 +1885,12 @@ function syncSettingsFields(modal) {
   const status = modal.querySelector("[data-ba-status]");
   if (status) {
     const st = state.status || {};
-    const rewriter = st.nip07Patched
-      ? "NIP-07 pre-sign rewriting active"
-      : "outgoing rewriting unavailable: no NIP-07 provider";
-    status.textContent = `${rewriter} · ${state.events.size} events captured · glub ${effectiveBuild(state.settings) || "build missing"}`;
+    const signer = st.signerHooked
+      ? `signer: ${st.signMode || "attached"}`
+      : st.nip07Patched
+        ? "rewriter: NIP-07"
+        : "signer: waiting";
+    status.textContent = `${signer} · ${state.events.size} events captured · glub ${effectiveBuild(state.settings) || "build missing"}`;
   }
   const build = modal.querySelector("[data-ba-build-status]");
   if (build) {
@@ -3428,7 +3435,9 @@ function syncFooter() {
   const status = state.status || {};
   const signer = root.querySelector("[data-role='foot-signer']");
   if (signer) {
-    signer.textContent = status.nip07Patched ? "rewriter: nip-07" : "rewriter: waiting";
+    if (status.signerHooked) signer.textContent = `signer: ${status.signMode || "attached"}`;
+    else if (status.nip07Patched) signer.textContent = "rewriter: nip-07";
+    else signer.textContent = "signer: waiting";
   }
   const build = root.querySelector("[data-role='foot-build']");
   if (build) {
@@ -3440,15 +3449,21 @@ function syncFooter() {
   const sub = root.querySelector("[data-role='header-sub']");
   if (sub) {
     const parts = [];
-    parts.push(status.nip07Patched ? "NIP-07 rewriter" : "rewriter waiting");
+    parts.push(
+      status.signerHooked
+        ? `signer ${status.signMode || "attached"}`
+        : status.nip07Patched
+          ? "NIP-07 rewriter"
+          : "signer waiting",
+    );
     if (b()) parts.push(`glub ${b().slice(0, 7)}`);
     sub.textContent = parts.join(" · ");
   }
   const dot = root.querySelector("[data-role='header-dot']");
   if (dot) {
     dot.className = "ba-status-dot";
-    if (status.nip07Patched && b()) dot.classList.add("ok");
-    else if (status.nip07Patched || b()) dot.classList.add("warn");
+    if ((status.signerHooked || status.nip07Patched) && b()) dot.classList.add("ok");
+    else if (status.signerHooked || status.nip07Patched || b()) dot.classList.add("warn");
     else dot.classList.add("err");
   }
 }
@@ -3619,9 +3634,13 @@ function renderRelay() {
         : `<span class="ba-relay-pill">no sockets observed yet</span>`;
   }
   if (info) {
-    const rewriter = status.nip07Patched ? "nip-07" : "waiting";
+    const signer = status.signerHooked
+      ? status.signMode || "attached"
+      : status.nip07Patched
+        ? "nip-07"
+        : "waiting";
     info.innerHTML = `
-      <div class="ba-kv"><span>rewriter</span><span>${h(rewriter)}</span></div>
+      <div class="ba-kv"><span>signer</span><span>${h(signer)}</span></div>
       <div class="ba-kv"><span>pubkey</span><span>${h(short(status.pubkey || "", 18))}</span></div>
       <div class="ba-kv"><span>sockets</span><span>${h(String(status.socketCount || 0))}</span></div>
       <div class="ba-kv"><span>events captured</span><span>${h(String(state.events.size))}</span></div>
@@ -3672,87 +3691,149 @@ function scheduleEnhance(force = false) {
   }, 120);
 }
 
-const CHAT_LABEL_MAP = new Map([
-  ["bitchat", "Chat"],
-  ["bitchat channels", "Chat channels"],
-  ["open bitchat globe", "Open Chat globe"],
-  ["close bitchat channels", "Close Chat channels"],
-  ["bitchat globe", "Chat globe"],
-  ["bitchat room", "Chat room"],
-  ["bitchat rooms", "Chat rooms"],
-  ["open bitchat", "Open Chat"],
-  ["close bitchat", "Close Chat"],
-]);
-const CHAT_LABEL_ROOTS = [
-  ".ag-app-rail",
-  ".ag-mobile-tabbar",
-  ".ag-conv-header",
-  ".ag-header",
-  ".ag-bitchat-drawer",
-  ".ag-bitchat-quickbar",
-  ".ag-bitchat-globe-stage",
-  ".ag-suite-popover",
-  ".ag-suite-footer",
-  ".ag-settings-modal",
-  ".ag-peer-modal",
-  ".ag-sheet",
-  ".ag-quick-profile-popover",
-  ".ag-ctx-menu",
-].join(",");
-const CHAT_LABEL_SELECTOR = [
-  "button",
-  "[role='button']",
-  "[role='tab']",
-  ".ag-set-label",
-  ".ag-set-nav-label",
-  ".ag-set-nav-sub",
-  ".ag-set-section-title",
-  ".ag-set-detail-title",
-  ".ag-set-mobile-title",
-  ".ag-suite-card-name",
-  ".ag-rail-app-tile",
-  ".ag-mtab-btn",
-  "[aria-label]",
-  "[title]",
-  "[placeholder]",
-].join(",");
+const CHAT_LABEL_RE = /\bBitchat\b/gi;
+const CHAT_LABEL_BLOCKED = [
+  ".ag-msg-rich",
+  ".ag-msg-content",
+  ".ag-chat-row-preview",
+  ".ag-msg-preview",
+  ".ag-conv-preview",
+  ".ag-composer",
+  ".ag-msg-author",
+  ".ag-users-name",
+  ".ag-peer-modal-name",
+  ".ag-qp-display-name",
+  "textarea",
+  "input",
+  "select",
+  "option",
+  "pre",
+  "code",
+  "script",
+  "style",
+  "[contenteditable='true']",
+].join(", ");
 
 function chatLabel(value) {
-  return CHAT_LABEL_MAP.get(String(value || "").trim().toLowerCase()) || "";
+  return String(value || "").replace(CHAT_LABEL_RE, "Chat");
 }
 
-// This is intentionally a label map, not a global text replacement. It only
-// touches recognized UI controls/attributes, never message content, and it does
-// not run on a timer. New nodes are picked up by the normal enhance pass.
+function removeTransientNativeToasts() {
+  for (const toast of document.querySelectorAll(".ag-toast")) {
+    const title = toast.querySelector(".ag-toast-title")?.textContent || "";
+    const detail = toast.querySelector(".ag-toast-detail")?.textContent || "";
+    const callsBlocked = !!state.settings.privacy.calls.disable;
+    if (
+      /running\s+locally\s+via\s+(?:wasm|webgpu)/i.test(detail) ||
+      /image\s+safety\s+classifier.*ready/i.test(title) ||
+      /\bwasm\b.*\bloaded\b|\bloaded\b.*\bwasm\b/i.test(`${title} ${detail}`) ||
+      (callsBlocked && /call\s+(?:blocked|signaling failed|failed)|unable to join .*call/i.test(`${title} ${detail}`))
+    ) {
+      toast.remove();
+    }
+  }
+}
+
+// Replace the product name across UI labels and attributes, including new
+// Bitchat surfaces, while leaving message bodies, names, and inputs untouched.
 function replaceBitchatText() {
   if (!state.enabledReady || state.settings.enabled === false || !document.body) return;
-  const blocked = ".ag-msg-rich, .ag-msg-content, .ag-chat-row-preview, .ag-msg-preview, .ag-conv-preview, .ag-composer, textarea, input, pre, code, script, style";
-  for (const root of document.querySelectorAll(CHAT_LABEL_ROOTS)) {
-    for (const el of root.querySelectorAll(CHAT_LABEL_SELECTOR)) {
-      if (!(el instanceof HTMLElement) || el.closest(blocked)) continue;
-      for (const attr of ["aria-label", "title", "placeholder"]) {
-        const value = el.getAttribute(attr);
-        if (!value) continue;
-        const mapped = chatLabel(value);
-        if (mapped) el.setAttribute(attr, mapped);
+  const now = performance.now();
+  if (now - state.lastBitchatReplace < 350) {
+    if (state.bitchatTimer === null) {
+      state.bitchatTimer = window.setTimeout(() => {
+        state.bitchatTimer = null;
+        replaceBitchatText();
+      }, 350 - (now - state.lastBitchatReplace));
+    }
+    return;
+  }
+  state.lastBitchatReplace = now;
+
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!CHAT_LABEL_RE.test(node.nodeValue || "")) {
+        CHAT_LABEL_RE.lastIndex = 0;
+        return NodeFilter.FILTER_REJECT;
       }
-      if (el.matches("input, textarea, select")) continue;
-      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-      const nodes = [];
-      while (walker.nextNode()) nodes.push(walker.currentNode);
-      for (const node of nodes) {
-        const value = node.nodeValue || "";
-        const trimmed = value.trim();
-        const mapped = chatLabel(trimmed);
-        if (!mapped) continue;
-        const start = value.indexOf(trimmed);
-        node.nodeValue = `${value.slice(0, start)}${mapped}${value.slice(start + trimmed.length)}`;
+      CHAT_LABEL_RE.lastIndex = 0;
+      const parent = node.parentElement;
+      if (!parent || parent.closest(CHAT_LABEL_BLOCKED)) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) node.nodeValue = chatLabel(node.nodeValue || "");
+
+  for (const el of document.querySelectorAll("[aria-label], [title], [placeholder], [alt]")) {
+    if (!(el instanceof HTMLElement) || el.closest(CHAT_LABEL_BLOCKED)) continue;
+    for (const attr of ["aria-label", "title", "placeholder", "alt"]) {
+      const value = el.getAttribute(attr);
+      if (value && CHAT_LABEL_RE.test(value)) {
+        CHAT_LABEL_RE.lastIndex = 0;
+        el.setAttribute(attr, chatLabel(value));
       }
+      CHAT_LABEL_RE.lastIndex = 0;
     }
   }
   if (/\bbitchat\b/i.test(document.title)) {
-    document.title = document.title.replace(/\bbitchat\b/gi, "Chat");
+    document.title = document.title.replace(CHAT_LABEL_RE, "Chat");
+    CHAT_LABEL_RE.lastIndex = 0;
   }
+}
+
+function scheduleBitchatReplace(delay = 80) {
+  if (state.bitchatTimer !== null) return;
+  state.bitchatTimer = window.setTimeout(() => {
+    state.bitchatTimer = null;
+    replaceBitchatText();
+  }, delay);
+}
+
+function observeChatLabels() {
+  if (typeof MutationObserver !== "function" || !document.body) return;
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.type === "characterData") {
+        if (CHAT_LABEL_RE.test(record.target.nodeValue || "")) {
+          CHAT_LABEL_RE.lastIndex = 0;
+          scheduleBitchatReplace();
+          return;
+        }
+        CHAT_LABEL_RE.lastIndex = 0;
+        continue;
+      }
+      if (record.type === "attributes") {
+        const el = record.target;
+        if (!(el instanceof Element)) continue;
+        const value = el.getAttribute(record.attributeName || "");
+        if (value && CHAT_LABEL_RE.test(value)) {
+          CHAT_LABEL_RE.lastIndex = 0;
+          scheduleBitchatReplace();
+          return;
+        }
+        CHAT_LABEL_RE.lastIndex = 0;
+        continue;
+      }
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (CHAT_LABEL_RE.test(node.textContent || "") || CHAT_LABEL_RE.test(node.getAttribute("aria-label") || "") || CHAT_LABEL_RE.test(node.getAttribute("title") || "")) {
+          CHAT_LABEL_RE.lastIndex = 0;
+          scheduleBitchatReplace();
+          return;
+        }
+        CHAT_LABEL_RE.lastIndex = 0;
+      }
+    }
+  });
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ["aria-label", "title", "placeholder", "alt"],
+  });
 }
 
 function maintainCallControls() {
@@ -3800,7 +3881,8 @@ function enhanceAll() {
     enhanceContextMenu();
     markBetterClients();
     hideSelfTeleportBadges();
-    replaceBitchatText();
+    removeTransientNativeToasts();
+    scheduleBitchatReplace();
   } finally {
     state.pageObserverStart?.();
   }
@@ -4188,11 +4270,17 @@ function isBetterClient(ev) {
   return isBetterClientName(getTagValue(ev.tags, "client"));
 }
 
+function outgoingToolsReady() {
+  const status = state.status;
+  if (!status) return true;
+  return status.signerHooked === true || status.nip07Patched === true;
+}
+
 function ownBetterClient() {
   return (
     state.settings.client.name.trim().toLowerCase() === "betteragnostr" &&
     state.settings.client.policies.chat === "spoof" &&
-    state.status?.nip07Patched !== false
+    outgoingToolsReady()
   );
 }
 
@@ -4261,7 +4349,7 @@ function syncPeerClientPill(modal) {
   if (
     !client &&
     pubkey === ownPubkey &&
-    state.status?.nip07Patched !== false &&
+    outgoingToolsReady() &&
     state.settings.client.policies.chat === "spoof" &&
     state.settings.client.name
   ) {
@@ -5498,12 +5586,33 @@ document.addEventListener(
 // Toasts
 // ---------------------------------------------------------------------------
 
+function toastIcon(level) {
+  if (level === "success") {
+    return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>';
+  }
+  if (level === "warning") {
+    return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>';
+  }
+  if (level === "error") {
+    return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>';
+}
+
 function toast(level, title, detail = "") {
   const root = state.shadow;
   if (!root) return;
   const container = root.querySelector("[data-role='toasts']");
   if (!container) return;
   const key = `${level}:${title}:${detail}`;
+  const now = Date.now();
+  const cooldown = level === "error" ? 15000 : 8000;
+  if (now - Number(toastCooldowns.get(key) || 0) < cooldown) return;
+  toastCooldowns.set(key, now);
+  if (toastCooldowns.size > 80) {
+    const first = toastCooldowns.keys().next().value;
+    if (first) toastCooldowns.delete(first);
+  }
   for (const existing of container.querySelectorAll(".ba-toast")) {
     if (existing.dataset.baToastKey === key) return;
   }
@@ -5512,7 +5621,7 @@ function toast(level, title, detail = "") {
   node.className = `ba-toast ${level}`;
   node.dataset.baToastKey = key;
   node.setAttribute("role", level === "error" ? "alert" : "status");
-  node.innerHTML = `<div><div class="ba-toast-title">${h(title)}</div>${detail ? `<div class="ba-toast-detail">${h(detail)}</div>` : ""}</div><button type="button" class="ba-toast-close" aria-label="Dismiss">×</button>`;
+  node.innerHTML = `<span class="ba-toast-icon">${toastIcon(level)}</span><div class="ba-toast-copy"><div class="ba-toast-title">${h(title)}</div>${detail ? `<div class="ba-toast-detail">${h(detail)}</div>` : ""}</div><button type="button" class="ba-toast-close" aria-label="Dismiss">×</button>`;
   const close = node.querySelector(".ba-toast-close");
   let timer = null;
   const remove = () => {
@@ -5566,6 +5675,7 @@ function renderDiagnostics() {
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
+    <div class="ba-kv"><span>signer</span><span>${status.signerHooked ? h(status.signMode || "attached") : "no"}</span></div>
     <div class="ba-kv"><span>nip-07 rewriter</span><span>${status.nip07Patched ? "yes" : "no"}</span></div>
     <div class="ba-kv"><span>pubkey</span><span>${h(short(status.pubkey || "", 20))}</span></div>
     <div class="ba-kv"><span>glub build</span><span>${h(effectiveBuild(state.settings) || "missing")}</span></div>
@@ -5580,6 +5690,7 @@ function copyDiagnostics() {
     `Better Agnostr ${api.runtime.getManifest?.().version || VERSION}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
+    `signer: ${status.signerHooked ? status.signMode || "attached" : "no"}`,
     `nip07 rewriter: ${status.nip07Patched}`,
     `pubkey: ${status.pubkey}`,
     `glub build: ${effectiveBuild(state.settings)}`,
@@ -5604,6 +5715,8 @@ function observePage() {
     ".ag-bitchat-quickbar",
     ".ag-bitchat-globe-stage",
     ".ag-suite-footer",
+    ".ag-toast-stack",
+    ".ag-toast",
     ".ag-rail-srv",
     ".ag-srv-mobile-rail",
     ".ag-mobile-tabbar",
@@ -5895,6 +6008,7 @@ async function init() {
   window.setInterval(flairTickerTick, 1500);
   ensureHost();
   observePage();
+  observeChatLabels();
   applyShortcutVisibility();
   scheduleSettingsSync();
   hello();
