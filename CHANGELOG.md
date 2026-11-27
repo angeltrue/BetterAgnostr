@@ -4,9 +4,9 @@ All notable changes to Better Agnostr are documented here.
 
 ## 1.3.3 — animated flair edges
 
-- Let flaired layers extend beyond the message row and fade over a wider band in the gap, so animated particles, curtains, embers, rain, and shooting stars are no longer clipped mid-animation at the row edge.
-- Kept the full effect opaque across the actual row and moved the fade into the space between rows.
-- Corrected shooting-star positioning for the taller flair layer.
+- Widened the flair edge fade so animated particles, curtains, embers, rain, and shooting stars taper out instead of being clipped mid-animation at the row edge.
+- Kept the stars card’s dark edge crisp while softening the animated effects around it.
+- Corrected shooting-star positioning for the flair layer.
 - Kept Firefox and Chromium downloads in one release entry.
 
 ## 1.3.2 — scalable flairs and seamless rows
