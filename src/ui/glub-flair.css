@@ -2529,6 +2529,71 @@ html.retro .flairScan {
   pointer-events: none;
   z-index: 0;
   border-radius: inherit;
+  /* Soften the top and bottom edge where a row's flair meets the next one. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 4px, #000 calc(100% - 4px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 4px, #000 calc(100% - 4px), transparent 100%);
+}
+
+/* Stars need a field that scales with the row instead of two fixed bands. */
+.ag-msg-row > .ba-flair-layer.flair-stars {
+  background-color: #04060d;
+  background-image:
+    radial-gradient(circle at 14% 22%, #ffffff 0 1px, transparent 1.8px),
+    radial-gradient(circle at 58% 68%, #cfe6ff 0 1px, transparent 1.7px),
+    radial-gradient(circle at 82% 38%, #ffffff 0 1.2px, transparent 2px),
+    radial-gradient(circle at 34% 84%, #a8ccff 0 0.9px, transparent 1.6px),
+    radial-gradient(circle at 71% 12%, #dbe9ff 0 0.8px, transparent 1.5px);
+  background-size: 137px 113px, 211px 173px, 293px 239px, 367px 307px, 449px 389px;
+  background-position: var(--star-bg-x, 0) var(--star-bg-y, 0);
+  background-repeat: repeat;
+}
+
+.ag-msg-row > .ba-flair-layer.flair-stars::before,
+.ag-msg-row > .ba-flair-layer.flair-stars::after {
+  z-index: 1;
+}
+
+.ag-msg-row > .ba-flair-layer.flair-stars > .flairFx,
+.ag-msg-row > .ba-flair-layer.flair-stars > .ba-shooting-star {
+  z-index: 2;
+}
+
+.ag-msg-row.flair-stars .ag-msg-content,
+.ag-msg-row.flair-stars .ag-msg-author,
+.ag-msg-row.flair-stars .ag-msg-time {
+  color: #eaf2ff !important;
+}
+
+.ba-set-preview-row.flair-stars,
+.ba-preview-row.flair-stars {
+  background-color: #04060d;
+  background-image:
+    radial-gradient(circle at 14% 22%, #ffffff 0 1px, transparent 1.8px),
+    radial-gradient(circle at 58% 68%, #cfe6ff 0 1px, transparent 1.7px),
+    radial-gradient(circle at 82% 38%, #ffffff 0 1.2px, transparent 2px),
+    radial-gradient(circle at 34% 84%, #a8ccff 0 0.9px, transparent 1.6px);
+  background-size: 137px 113px, 211px 173px, 293px 239px, 367px 307px;
+}
+
+.ba-set-preview-row.flair-stars::before,
+.ba-set-preview-row.flair-stars::after,
+.ba-preview-row.flair-stars::before,
+.ba-preview-row.flair-stars::after {
+  z-index: 0;
+}
+
+.ba-set-preview-row.flair-stars > .flairFx,
+.ba-preview-row.flair-stars > .flairFx {
+  z-index: 1;
+}
+
+.ba-set-preview-row.flair-stars .ba-set-preview-name,
+.ba-set-preview-row.flair-stars .ba-set-preview-tag,
+.ba-set-preview-row.flair-stars .ba-set-preview-line,
+.ba-preview-row.flair-stars .ba-preview-name,
+.ba-preview-row.flair-stars .ba-preview-tag,
+.ba-preview-row.flair-stars .ba-preview-line {
+  color: #eaf2ff;
 }
 .ag-msg-row > .ag-msg-gutter,
 .ag-msg-row > .ag-msg-content {
