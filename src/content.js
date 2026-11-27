@@ -5946,14 +5946,16 @@ function observePage() {
         if (target instanceof Element && target.closest(".ag-users-row")) repairPeopleBadges();
         for (const node of [...record.addedNodes, ...record.removedNodes]) {
           if (!(node instanceof Element)) continue;
-          if (node.matches(".ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name")) {
-            repairPeopleBadges();
-          }
-          if (
-            node.matches(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section") ||
-            node.querySelector(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section")
-          ) {
-            syncSettingsIntegration();
+          if (!node.closest(".ag-msg-row")) {
+            if (node.matches(".ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name")) {
+              repairPeopleBadges();
+            }
+            if (
+              node.matches(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section") ||
+              node.querySelector(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section")
+            ) {
+              syncSettingsIntegration();
+            }
           }
           if (node.matches(relevantSelector) || node.querySelector(relevantSelector)) {
             relevant = true;
