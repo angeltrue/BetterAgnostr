@@ -185,7 +185,7 @@ export function flairFxInner(raw, options = {}) {
 	const n = flairName(raw);
 	if (n === "stars") return starBandMarkup();
 	if (n === "aurora") return auroraCurtainMarkup();
-	if (n === "fire") return fireEmberMarkup(!!options.spread);
+	if (n === "fire") return fireEmberMarkup(!!options.spread) + fireAshMarkup(!!options.spread);
 	if (n === "rain") return rainDropMarkup();
 	if (n === "plume") return plumePuffMarkup();
 	// neon's fx layer holds the one part of it that isn't tube: the segment that
@@ -293,18 +293,6 @@ export function lightningStrikeMarkup(w, h) {
 const EMBER_TINTS = ["#ffb057", "#ff7a18", "#ffd08a", "#ff9d3d", "#ffc46b", "#ff6a00"];
 const ASH_TINTS = ["#a89a8f", "#8a7f77", "#d8c2ad", "#e08a3a", "#b58c70", "#ffb066", "#f0c49a"];
 
-// Ash uses wider spacing and more vertical scatter than the other box-shadow
-// fields, so a shower does not read as an evenly printed row of dots.
-function ashField(count = 10) {
-	const out = [];
-	let x = 0;
-	for (let i = 0; i < count; i++) {
-		x += rnd(32, 116);
-		out.push(`${Math.round(x)}px ${Math.round(rnd(-9, 9))}px ${pick(ASH_TINTS)}`);
-	}
-	return out.join(", ");
-}
-
 // a drifting particle's lateral path, as offsets the keyframes ease through. Signs
 // alternate around a constant `lean` (the line's prevailing draft) so the particle
 // serpentines rather than travelling straight. Amplitudes are deliberately gentle:
@@ -356,6 +344,32 @@ export function fireEmberMarkup(spread = false) {
 			`--e-sway-delay:-${rnd(0, 3).toFixed(2)}s`,
 		].join(";");
 		html += `<span class="ember${short ? " emberShort" : ""}" style="${style}"></span>`;
+	}
+	return html;
+}
+
+// Ash needs its own element per speck. A box-shadow field is one composited
+// animation, so every clone rises on the same beat no matter how the offsets are
+// randomized. These spans get their own duration, phase, lift and drift.
+const ASH_MIN = 10;
+const ASH_MAX = 12;
+
+export function fireAshMarkup(spread = false) {
+	const count = ASH_MIN + ((Math.random() * (ASH_MAX - ASH_MIN + 1)) | 0);
+	let html = "";
+	for (let i = 0; i < count; i++) {
+		const style = [
+			`--a-x:${Math.round(rnd(3, 94))}%`,
+			...(spread ? [`--a-y:${Math.round(rnd(2, 96))}%`] : []),
+			`--a-size:${Math.random() < 0.3 ? 3 : 2}px`,
+			`--a-tint:${pick(ASH_TINTS)}`,
+			`--a-peak:${rnd(0.36, 0.76).toFixed(2)}`,
+			`--a-lift:${rnd(1.0, 1.9).toFixed(2)}em`,
+			...Object.entries(wobble("--a-x", rnd(6, 16), rnd(-5, 7))).map(([key, value]) => `${key}:${value}`),
+			`--a-dur:${rnd(4.2, 8.6).toFixed(2)}s`,
+			`--a-delay:-${rnd(0, 9).toFixed(2)}s`,
+		].join(";");
+		html += `<span class="ash" style="${style}"></span>`;
 	}
 	return html;
 }
@@ -1341,20 +1355,13 @@ export function flairVars(raw) {
 	// spacing, color and corkscrew all differ per line, so a screenful of fire
 	// lines breathes out of step instead of pulsing as one.
 	if (n === "fire") {
-		const lean = rnd(-6, 9); // this line's prevailing draft
 		return {
 			"--fire-glow-dur": `${rnd(2.6, 5.2).toFixed(2)}s`,
 			"--fire-glow-delay": `-${rnd(0, 5).toFixed(2)}s`,
 			"--fire-glow-peak": rnd(0.82, 1).toFixed(2),
 			"--fire-glow-low": rnd(0.34, 0.55).toFixed(2),
-			// the bright embers are individual spans (see fireEmberMarkup); this field
-			// is only the dim ash haze behind them, where uniform timing doesn't read
-			// - it's slow, faint, and snuffs out partway up (see flairAshRise).
-			"--ash-field": ashField(10),
-			"--ash-left": `${Math.round(rnd(6, 34))}px`,
-			"--ash-dur": `${rnd(4.2, 7.5).toFixed(2)}s`,
-			"--ash-delay": `-${rnd(0, 7).toFixed(2)}s`,
-			...wobble("--ash-x", rnd(8, 18), lean),
+			// embers and ash are individual spans (see fireEmberMarkup and
+			// fireAshMarkup), so each particle has its own phase and drift.
 			"--fire-text-dur": `${rnd(3.4, 6.2).toFixed(2)}s`,
 			"--fire-text-delay": `-${rnd(0, 5).toFixed(2)}s`,
 		};

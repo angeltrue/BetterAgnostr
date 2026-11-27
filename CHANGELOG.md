@@ -2,6 +2,13 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.4.4 — fire ash motion hotfix
+
+- Fire ash is now rendered as 10–12 independent spans instead of one box-shadow field. Every ash speck gets its own duration, phase delay, lift height and drift path, so the particles no longer rise in lockstep.
+- Ash particles keep their 2–3 px size and remain distributed across multi-message fire runs.
+- Kept the 1.4.3 aurora star fields and fire ash density.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.4.3 — flair detail hotfix
 
 - Fire ash now uses 10 particles per run instead of 8, with wider randomized spacing, more vertical scatter, and a wider drift path.

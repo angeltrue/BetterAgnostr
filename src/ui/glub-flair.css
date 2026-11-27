@@ -367,15 +367,16 @@ html[data-ba-rainbow="bright"],
 	animation: flairFireGlow var(--fire-glow-dur, 3.4s) ease-in-out var(--fire-glow-delay, 0s) infinite;
 }
 
-.flair-fire::after {
-	left: var(--ash-left, 20px);
-	top: calc(100% - 18px);
-	width: 3px;
-	height: 3px;
+.flair-fire .ash {
+	position: absolute;
+	bottom: var(--a-y, -2px);
+	left: var(--a-x, 20%);
+	width: var(--a-size, 2px);
+	height: var(--a-size, 2px);
 	border-radius: 50%;
-	background: #d8a06a;
-	box-shadow: var(--ash-field, 40px 0 #6d635c, 96px 0 #b9a89a, 158px 0 #c9762f, 226px 0 #7d726a);
-	animation: flairAshRise var(--ash-dur, 5.5s) linear var(--ash-delay, 0s) infinite;
+	background: var(--a-tint, #a89a8f);
+	opacity: 0;
+	animation: flairAshRise var(--a-dur, 5.5s) linear var(--a-delay, 0s) infinite;
 }
 
 .flair-fire > .flairFx {
@@ -483,25 +484,25 @@ html[data-ba-rainbow="bright"],
 		animation-timing-function: ease-in-out;
 	}
 	20% {
-		opacity: 0.75;
+		opacity: var(--a-peak, 0.6);
 		animation-timing-function: ease-in-out;
 	}
 	42% {
-		transform: translate3d(var(--ash-x1, -4px), -0.5em, 0);
-		opacity: 0.56;
+		transform: translate3d(var(--a-x1, -4px), calc(var(--a-lift, 1.45em) * -0.34), 0);
+		opacity: calc(var(--a-peak, 0.6) * 0.76);
 		animation-timing-function: ease-in-out;
 	}
 	60% {
-		transform: translate3d(var(--ash-x2, 6px), -0.95em, 0);
-		opacity: 0.3;
+		transform: translate3d(var(--a-x2, 6px), calc(var(--a-lift, 1.45em) * -0.66), 0);
+		opacity: calc(var(--a-peak, 0.6) * 0.4);
 		animation-timing-function: ease-in-out;
 	}
 	76% {
-		transform: translate3d(var(--ash-x3, -3px), -1.3em, 0);
+		transform: translate3d(var(--a-x3, -3px), calc(var(--a-lift, 1.45em) * -0.9), 0);
 		opacity: 0;
 	}
 	100% {
-		transform: translate3d(var(--ash-x3, -3px), -1.45em, 0);
+		transform: translate3d(var(--a-x3, -3px), calc(var(--a-lift, 1.45em) * -1), 0);
 		opacity: 0;
 	}
 }
