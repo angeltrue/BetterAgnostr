@@ -2,6 +2,14 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.4 — joined flairs, instant Chat labels, theme consistency
+
+- Rows with the same flair now join into one continuous run: no fade or un-flaired seam between them, with the fade reserved for the outer ends of the run.
+- Joined flairs extend into the gap between messages, including grouped messages, and square off their shared corners; different flairs still fade separately.
+- Bitchat labels are now replaced synchronously from the DOM mutation observer, before paint, instead of waiting for the debounced text sweep.
+- Fixed the custom-property cycle that made event-viewer and custom-action text fall back to the dark default on light themes.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.3 — animated flair edges
 
 - Widened the flair edge fade so animated particles, curtains, embers, rain, and shooting stars taper out instead of being clipped mid-animation at the row edge.

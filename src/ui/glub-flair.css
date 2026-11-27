@@ -2523,15 +2523,32 @@ html.retro .flairScan {
 }
 .ag-msg-row > .ba-flair-layer {
   position: absolute !important;
-  inset: 0 !important;
+  top: calc(-1 * var(--ba-flair-bleed-top, 0px)) !important;
+  right: 0 !important;
+  bottom: calc(-1 * var(--ba-flair-bleed-bottom, 0px)) !important;
+  left: 0 !important;
   display: block;
   overflow: hidden !important;
   pointer-events: none;
   z-index: 0;
   border-radius: inherit;
-  /* Soften the top and bottom edge where a row's flair meets the next one. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
+  --ba-flair-mask-top: 10px;
+  --ba-flair-mask-bottom: 10px;
+  /* Fade only where a flair run ends. Rows with the same flair join without a seam. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--ba-flair-mask-top), #000 calc(100% - var(--ba-flair-mask-bottom)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--ba-flair-mask-top), #000 calc(100% - var(--ba-flair-mask-bottom)), transparent 100%);
+}
+
+.ag-msg-row[data-ba-flair-join-top] > .ba-flair-layer {
+  --ba-flair-mask-top: 0px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.ag-msg-row[data-ba-flair-join-bottom] > .ba-flair-layer {
+  --ba-flair-mask-bottom: 0px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 /* Stars need a field that scales with the row instead of two fixed bands. */

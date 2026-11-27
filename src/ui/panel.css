@@ -1315,18 +1315,13 @@ a {
   --scanline-color: color-mix(in srgb, var(--ba-text) 7%, transparent);
 }
 
-/* Shared Glub preview (settings + event viewer). */
+/* Shared Glub preview (settings + event viewer). Do not map the page-side
+   --text-*/--bg-* names back onto --ba-* here: that creates a custom-property
+   cycle and makes light-theme viewer text fall back to the dark default. */
 :host {
   --bg: var(--ba-bg);
   --fg: var(--ba-text);
   --accent: var(--ba-accent);
-  --bg-canvas: var(--ba-bg);
-  --bg-elevated: var(--ba-elevated);
-  --border-subtle: var(--ba-border-subtle);
-  --border-default: var(--ba-border);
-  --text-primary: var(--ba-text);
-  --text-secondary: var(--ba-text-2);
-  --text-muted: var(--ba-muted);
   --scanline-color: color-mix(in srgb, var(--ba-text) 7%, transparent);
 }
 .ba-set-preview {

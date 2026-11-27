@@ -3734,6 +3734,59 @@ function removeTransientNativeToasts() {
   }
 }
 
+// Replace immediately in a newly added subtree / text node. MutationObserver
+// callbacks run before the next paint, so this prevents the old label from
+// flashing before the debounced full sweep runs.
+function replaceChatLabelsIn(root) {
+  if (!root) return;
+  if (root.nodeType === Node.TEXT_NODE) {
+    const parent = root.parentElement;
+    if (parent && !parent.closest(CHAT_LABEL_BLOCKED) && CHAT_LABEL_RE.test(root.nodeValue || "")) {
+      CHAT_LABEL_RE.lastIndex = 0;
+      root.nodeValue = chatLabel(root.nodeValue || "");
+    }
+    CHAT_LABEL_RE.lastIndex = 0;
+    return;
+  }
+  if (!(root instanceof Element)) return;
+  if (!root.closest(CHAT_LABEL_BLOCKED)) {
+    for (const attr of ["aria-label", "title", "placeholder", "alt"]) {
+      const value = root.getAttribute(attr);
+      if (value && CHAT_LABEL_RE.test(value)) {
+        CHAT_LABEL_RE.lastIndex = 0;
+        root.setAttribute(attr, chatLabel(value));
+      }
+      CHAT_LABEL_RE.lastIndex = 0;
+    }
+  }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!CHAT_LABEL_RE.test(node.nodeValue || "")) {
+        CHAT_LABEL_RE.lastIndex = 0;
+        return NodeFilter.FILTER_REJECT;
+      }
+      CHAT_LABEL_RE.lastIndex = 0;
+      const parent = node.parentElement;
+      if (!parent || parent.closest(CHAT_LABEL_BLOCKED)) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) node.nodeValue = chatLabel(node.nodeValue || "");
+  for (const el of root.querySelectorAll("[aria-label], [title], [placeholder], [alt]")) {
+    if (!(el instanceof HTMLElement) || el.closest(CHAT_LABEL_BLOCKED)) continue;
+    for (const attr of ["aria-label", "title", "placeholder", "alt"]) {
+      const value = el.getAttribute(attr);
+      if (value && CHAT_LABEL_RE.test(value)) {
+        CHAT_LABEL_RE.lastIndex = 0;
+        el.setAttribute(attr, chatLabel(value));
+      }
+      CHAT_LABEL_RE.lastIndex = 0;
+    }
+  }
+}
+
 // Replace the product name across UI labels and attributes, including new
 // Bitchat surfaces, while leaving message bodies, names, and inputs untouched.
 function replaceBitchatText() {
@@ -3798,6 +3851,7 @@ function observeChatLabels() {
       if (record.type === "characterData") {
         if (CHAT_LABEL_RE.test(record.target.nodeValue || "")) {
           CHAT_LABEL_RE.lastIndex = 0;
+          replaceChatLabelsIn(record.target);
           scheduleBitchatReplace();
           return;
         }
@@ -3810,6 +3864,7 @@ function observeChatLabels() {
         const value = el.getAttribute(record.attributeName || "");
         if (value && CHAT_LABEL_RE.test(value)) {
           CHAT_LABEL_RE.lastIndex = 0;
+          replaceChatLabelsIn(el);
           scheduleBitchatReplace();
           return;
         }
@@ -3817,9 +3872,20 @@ function observeChatLabels() {
         continue;
       }
       for (const node of record.addedNodes) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          if (CHAT_LABEL_RE.test(node.nodeValue || "")) {
+            CHAT_LABEL_RE.lastIndex = 0;
+            replaceChatLabelsIn(node);
+            scheduleBitchatReplace();
+            return;
+          }
+          CHAT_LABEL_RE.lastIndex = 0;
+          continue;
+        }
         if (!(node instanceof Element)) continue;
         if (CHAT_LABEL_RE.test(node.textContent || "") || CHAT_LABEL_RE.test(node.getAttribute("aria-label") || "") || CHAT_LABEL_RE.test(node.getAttribute("title") || "")) {
           CHAT_LABEL_RE.lastIndex = 0;
+          replaceChatLabelsIn(node);
           scheduleBitchatReplace();
           return;
         }
@@ -4194,6 +4260,7 @@ function repairRowNow(row) {
     ensureRowButtons(row, id);
     markRowClientLabels(row, ev);
     decorateRow(row, ev);
+    updateFlairJoins();
     const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
     row.dataset.baDecorated = `${id}:${state.settingsEpoch}:${ownPubkey}`;
   } finally {
@@ -4203,6 +4270,51 @@ function repairRowNow(row) {
     window.setTimeout(() => state.repairingRows.delete(row), 0);
   }
   return true;
+}
+
+function updateFlairJoins() {
+  const rectCache = new Map();
+  const rectOf = (el) => {
+    if (!(el instanceof HTMLElement)) return null;
+    let rect = rectCache.get(el);
+    if (!rect) {
+      rect = el.getBoundingClientRect();
+      rectCache.set(el, rect);
+    }
+    return rect;
+  };
+  const flaired = [...document.querySelectorAll(".ag-msg-row[data-ba-flair]")];
+  for (const row of flaired) {
+    const flair = row.dataset.baFlair;
+    const prev = row.previousElementSibling;
+    const next = row.nextElementSibling;
+    const topJoin =
+      prev instanceof HTMLElement &&
+      prev.classList.contains("ag-msg-row") &&
+      prev.dataset.baFlair === flair;
+    const bottomJoin =
+      next instanceof HTMLElement &&
+      next.classList.contains("ag-msg-row") &&
+      next.dataset.baFlair === flair;
+    const topGap = topJoin ? Math.min(16, Math.max(0, rectOf(row).top - rectOf(prev).bottom)) : 0;
+    const bottomGap = bottomJoin ? Math.min(16, Math.max(0, rectOf(next).top - rectOf(row).bottom)) : 0;
+    row.toggleAttribute("data-ba-flair-join-top", topJoin);
+    row.toggleAttribute("data-ba-flair-join-bottom", bottomJoin);
+    if (topJoin) row.style.setProperty("--ba-flair-bleed-top", `${Math.round(topGap)}px`);
+    else row.style.removeProperty("--ba-flair-bleed-top");
+    if (bottomJoin) row.style.setProperty("--ba-flair-bleed-bottom", `${Math.round(bottomGap)}px`);
+    else row.style.removeProperty("--ba-flair-bleed-bottom");
+  }
+  // A row that lost its flair must not keep stale join styling.
+  for (const row of document.querySelectorAll("[data-ba-flair-join-top], [data-ba-flair-join-bottom]")) {
+    if (row instanceof HTMLElement && row.dataset.baFlair) continue;
+    row.removeAttribute("data-ba-flair-join-top");
+    row.removeAttribute("data-ba-flair-join-bottom");
+    if (row instanceof HTMLElement) {
+      row.style.removeProperty("--ba-flair-bleed-top");
+      row.style.removeProperty("--ba-flair-bleed-bottom");
+    }
+  }
 }
 
 function decorateRows() {
@@ -4234,6 +4346,7 @@ function decorateRows() {
     decorateRow(row, ev);
     row.dataset.baDecorated = signature;
   }
+  updateFlairJoins();
 }
 
 function ensureRowButtons(row, id) {
@@ -5901,6 +6014,10 @@ async function init() {
   }
   window.addEventListener("message", handlePageMessage);
   document.documentElement.classList.add("ba-active");
+  // Catch labels rendered while extension storage was loading, before the first
+  // debounced enhance pass.
+  replaceBitchatText();
+  removeTransientNativeToasts();
   overrideNativeSounds();
   document.addEventListener("pointerdown", () => {
     if (!state.soundUnlocked) {
