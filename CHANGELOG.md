@@ -2,6 +2,17 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.6 — flair polish, concrete badges, instant settings
+
+- Rain now continues through the next message in a same-flair run, so drops no longer stop at every row boundary.
+- Star band density now adapts to message height: small messages get fewer animated bands, tall messages get the full set.
+- Neon rows in the same run now share one tube color and remove the shared border/glow edge, fixing the color mismatch and cut line.
+- Aurora rows in the same run no longer fade at their shared boundary, removing the visible cut line while keeping the outer fade.
+- Replaced the pseudo-element BA plaque with a real `.ba-client-badge` element with an accessible label.
+- Settings injection now reacts to the native settings modal before paint instead of waiting for the debounced sync, so Better Agnostr controls do not visibly pop in.
+- Added a static Chat-label fallback for the rail/tab labels to prevent Bitchat flicker before the adapter runs.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.5 — rain loops and animated star bands
 
 - Reworked rain so drops stay invisible above the message, enter at the top edge, fall through the full row, and fade out at the bottom instead of popping into view or being clipped mid-cycle.

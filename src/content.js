@@ -3844,6 +3844,30 @@ function scheduleBitchatReplace(delay = 80) {
   }, delay);
 }
 
+function observeSettingsModal() {
+  if (typeof MutationObserver !== "function" || !document.body) return;
+  const observer = new MutationObserver((records) => {
+    const modal = document.querySelector(".ag-settings-modal");
+    if (!modal) return;
+    for (const record of records) {
+      if (record.type !== "childList") continue;
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        const insideModal = !!node.closest(".ag-settings-modal") || node.matches(".ag-settings-modal");
+        if (!insideModal) continue;
+        if (
+          node.matches(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section") ||
+          node.querySelector(".ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section")
+        ) {
+          syncSettingsIntegration();
+          return;
+        }
+      }
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
 function observeChatLabels() {
   if (typeof MutationObserver !== "function" || !document.body) return;
   const observer = new MutationObserver((records) => {
@@ -4233,7 +4257,7 @@ function rowDecorationIntact(row, ev) {
   const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
   const ownMessage = !!ev.pubkey && String(ev.pubkey).toLowerCase() === ownPubkey;
   const expectedBetter = isBetterClient(ev) || (ownMessage && ownBetterClient());
-  if (author && expectedBetter && !author.classList.contains("ba-better-name")) return false;
+  if (author && (!!author.querySelector(":scope > .ba-client-badge")) !== expectedBetter) return false;
   if (row.dataset.baRichId && (!rich || rich.dataset.baRich !== row.dataset.baRichId)) return false;
   try {
     const expectedVars = JSON.parse(row.dataset.baLineVars || "{}");
@@ -4298,6 +4322,19 @@ function updateFlairJoins() {
       next instanceof HTMLElement &&
       next.classList.contains("ag-msg-row") &&
       next.dataset.baFlair === flair;
+    if (flair === "neon" && topJoin) {
+      try {
+        const saved = JSON.parse(row.dataset.baFlairVars || "{}");
+        for (const key of ["--neon-lit", "--neon-halo"]) {
+          const value = prev.style.getPropertyValue(key);
+          if (!value) continue;
+          row.style.setProperty(key, value);
+          saved[key] = value;
+        }
+        row.dataset.baFlairVars = JSON.stringify(saved);
+      } catch {}
+    }
+    if (flair === "stars") syncStarBandDensity(row);
     const topGap = topJoin ? Math.min(16, Math.max(0, rectOf(row).top - rectOf(prev).bottom)) : 0;
     const bottomGap = bottomJoin ? Math.min(16, Math.max(0, rectOf(next).top - rectOf(row).bottom)) : 0;
     row.toggleAttribute("data-ba-flair-join-top", topJoin);
@@ -4306,6 +4343,12 @@ function updateFlairJoins() {
     else row.style.removeProperty("--ba-flair-bleed-top");
     if (bottomJoin) row.style.setProperty("--ba-flair-bleed-bottom", `${Math.round(bottomGap)}px`);
     else row.style.removeProperty("--ba-flair-bleed-bottom");
+    if (flair === "rain") {
+      const extra = bottomJoin ? Math.max(0, rectOf(next).bottom - rectOf(row).bottom) : 0;
+      row.style.setProperty("--rain-drop-extra", `${Math.round(extra)}px`);
+    } else {
+      row.style.removeProperty("--rain-drop-extra");
+    }
   }
   // A row that lost its flair must not keep stale join styling.
   for (const row of document.querySelectorAll("[data-ba-flair-join-top], [data-ba-flair-join-bottom]")) {
@@ -4315,8 +4358,20 @@ function updateFlairJoins() {
     if (row instanceof HTMLElement) {
       row.style.removeProperty("--ba-flair-bleed-top");
       row.style.removeProperty("--ba-flair-bleed-bottom");
+      row.style.removeProperty("--rain-drop-extra");
     }
   }
+}
+
+function syncStarBandDensity(row) {
+  if (!(row instanceof HTMLElement) || row.dataset.baFlair !== "stars") return;
+  const fx = row.querySelector(":scope > .flairFx");
+  if (!fx) return;
+  const height = row.getBoundingClientRect().height;
+  const count = height < 64 ? 1 : height < 100 ? 2 : height < 150 ? 3 : height < 220 ? 4 : 6;
+  [...fx.querySelectorAll(".starBand")].forEach((band, index) => {
+    band.style.display = index < count ? "" : "none";
+  });
 }
 
 function decorateRows() {
@@ -4400,7 +4455,22 @@ function ownBetterClient() {
 }
 
 function setBetterName(el, show) {
-  if (el instanceof HTMLElement) el.classList.toggle("ba-better-name", !!show);
+  if (!(el instanceof HTMLElement)) return;
+  let badge = el.querySelector(":scope > .ba-client-badge");
+  if (show) {
+    el.classList.add("ba-better-name");
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "ba-client-badge";
+      badge.textContent = "BA";
+      badge.title = "Better Agnostr client";
+      badge.setAttribute("aria-label", "Better Agnostr client");
+      el.appendChild(badge);
+    }
+  } else {
+    el.classList.remove("ba-better-name");
+    badge?.remove();
+  }
 }
 
 function knownBetterHandle(handle) {
@@ -4834,6 +4904,7 @@ function applyFlair(row, ev, flair) {
     fx.setAttribute("aria-hidden", "true");
     fx.innerHTML = flairFxInner(flair);
     wrap.after(fx);
+    if (flair === "stars") syncStarBandDensity(row);
   }
 }
 
@@ -6130,6 +6201,7 @@ async function init() {
   ensureHost();
   observePage();
   observeChatLabels();
+  observeSettingsModal();
   applyShortcutVisibility();
   scheduleSettingsSync();
   hello();
