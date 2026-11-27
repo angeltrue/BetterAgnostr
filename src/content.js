@@ -4791,7 +4791,7 @@ function applyFlair(row, ev, flair) {
     delete row.dataset.baFlairSuppressed;
   }
   const layer = row.querySelector(":scope > .ba-flair-layer");
-  const hasFx = !flairHasFx(flair) || !!layer?.querySelector(":scope > .flairFx");
+  const hasFx = !flairHasFx(flair) || !!row.querySelector(":scope > .flairFx");
   const hasScan = !flairOverlayInner(flair) || !!layer?.querySelector(":scope > .flairScan");
   const hasClasses = classes.every((cls) => row.classList.contains(cls));
   const quiet = !!state.settings.studio.reduceMotion;
@@ -4821,16 +4821,18 @@ function applyFlair(row, ev, flair) {
   wrap.setAttribute("aria-hidden", "true");
   for (const cls of classes) wrap.classList.add(cls);
   if (quiet) wrap.classList.add("flairQuiet");
+  const overlay = flairOverlayInner(flair);
+  if (overlay) wrap.insertAdjacentHTML("beforeend", overlay);
+  row.prepend(wrap);
   if (flairHasFx(flair)) {
+    // Keep animated FX outside the clipped background layer so particles,
+    // puffs, curtains, and bolts can travel past the row edge.
     const fx = document.createElement("span");
     fx.className = "flairFx";
     fx.setAttribute("aria-hidden", "true");
     fx.innerHTML = flairFxInner(flair);
-    wrap.appendChild(fx);
+    wrap.after(fx);
   }
-  const overlay = flairOverlayInner(flair);
-  if (overlay) wrap.insertAdjacentHTML("beforeend", overlay);
-  row.prepend(wrap);
 }
 
 function cleanupRichObservers() {
