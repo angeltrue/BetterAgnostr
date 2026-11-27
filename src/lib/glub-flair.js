@@ -151,8 +151,22 @@ function auroraCurtainMarkup() {
 	return html;
 }
 
+function starBandMarkup() {
+	let html = "";
+	for (let i = 0; i < 6; i++) {
+		const top = (5 + i * 15 + rnd(-3, 3)).toFixed(1);
+		const left = Math.round(rnd(0, 48));
+		const field = particleField(14 + ((Math.random() * 7) | 0), 54, 5, STAR_TINTS);
+		const dur = rnd(3.2, 6.8).toFixed(2);
+		const delay = rnd(0, 6).toFixed(2);
+		html += `<span class="starBand" style="--sb-top:${top}%;--sb-left:${left}px;--sb-field:${field};--sb-dur:${dur}s;--sb-delay:-${delay}s"></span>`;
+	}
+	return html;
+}
+
 export function flairFxInner(raw) {
 	const n = flairName(raw);
+	if (n === "stars") return starBandMarkup();
 	if (n === "aurora") return auroraCurtainMarkup();
 	if (n === "fire") return fireEmberMarkup();
 	if (n === "rain") return rainDropMarkup();

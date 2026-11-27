@@ -1979,6 +1979,10 @@ html.retro .flairScan {
 	inset: 0;
 	opacity: 1;
 	container-type: size;
+	/* Keep the invisible spawn run above the row from showing outside it, while
+	   still allowing drops and splashes to continue below the message. */
+	-webkit-clip-path: inset(0 0 -28px 0);
+	clip-path: inset(0 0 -28px 0);
 }
 
 .flair-rain .drop {
@@ -2012,37 +2016,39 @@ html.retro .flairScan {
 
 @keyframes rainFall {
 	0% {
-		translate: 0 -12px;
+		translate: 0 calc(-1 * var(--d-len, 7px) - 12px);
 		opacity: 0;
 	}
-	10% {
-		opacity: var(--d-op, 0.8);
-	}
-	
-	80% {
-		translate: var(--d-lean, 3px) calc(100cqh - var(--d-len, 7px) - 6px);
-		opacity: var(--d-op, 0.8);
-	}
-	
-	87% {
-		translate: var(--d-lean, 3px) calc(100cqh - var(--d-len, 7px) - 6px);
+	28% {
+		translate: 0 calc(-1 * var(--d-len, 7px) - 2px);
 		opacity: 0;
 	}
-	100% {
-		translate: var(--d-lean, 3px) calc(100cqh - var(--d-len, 7px) - 6px);
+	30% {
+		translate: 0 0;
+		opacity: var(--d-op, 0.8);
+	}
+	82% {
+		translate: var(--d-lean, 3px) calc(100cqh - var(--d-len, 7px) - 2px);
+		opacity: var(--d-op, 0.8);
+	}
+	92%, 100% {
+		translate: var(--d-lean, 3px) calc(100cqh - var(--d-len, 7px) - 2px);
 		opacity: 0;
 	}
 }
 
 @keyframes rainRipple {
-	0%,
-	80% {
+	0%, 82% {
 		transform: scale(0.2);
 		opacity: 0;
 	}
-	85% {
+	86% {
 		transform: scale(0.55);
 		opacity: 0.9;
+	}
+	92% {
+		transform: scale(2.1);
+		opacity: 0.45;
 	}
 	100% {
 		transform: scale(2.1);
@@ -2298,12 +2304,33 @@ html.retro .flairScan {
 }
 
 .flair-stars > .flairFx {
-	left: 0;
-	top: 0;
-	width: 44px;
+	inset: 0;
+	width: auto;
+	height: auto;
+	border-radius: 0;
+	background: none;
+	opacity: 1;
+}
+
+.flair-stars .starBand {
+	position: absolute;
+	left: var(--sb-left, 10px);
+	top: var(--sb-top, 20%);
+	width: 2px;
 	height: 2px;
-	border-radius: 2px;
-	background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(214, 234, 255, 0.35) 45%, #ffffff 100%);
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: var(--sb-field, 40px 0 #fff, 96px 0 #cfe6ff);
+	opacity: 0;
+	animation: starBandTwinkle var(--sb-dur, 4s) ease-in-out var(--sb-delay, 0s) infinite;
+}
+
+@keyframes starBandTwinkle {
+	0%, 100% { opacity: 0.12; }
+	20% { opacity: 0.9; }
+	48% { opacity: 0.3; }
+	70% { opacity: 1; }
+	88% { opacity: 0.2; }
 }
 
 .flair-lightning > .flairFx {
