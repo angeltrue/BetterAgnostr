@@ -2,6 +2,14 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.2 — scalable flairs and seamless rows
+
+- Rebuilt the stars flair as a repeating starfield that fills any row height, including image and long-message rows, instead of stopping after two bands.
+- Added an ink-black base and light text inside the stars flair so it remains readable on Agnostr’s light/default theme.
+- Softened the top and bottom edges of every message flair layer so consecutive flaired messages no longer show a hard cutoff line where one row ends and the next begins.
+- Kept the stars/shooting-star animation and the existing flair budget behavior.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.1 — signer restoration and notification/UI fixes
 
 - Restored Agnostr signer integration and the local-key fallback, with bounded discovery, exponential backoff, cached instances, and fail-closed handling when no signer can be reached. Teleport-tag messages can be stripped and re-signed again instead of being blocked.

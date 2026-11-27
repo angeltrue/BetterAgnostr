@@ -1538,5 +1538,9 @@ export function flairVars(raw) {
 		"--star-b-dur": `${rnd(2.8, 5.6).toFixed(2)}s`,
 		"--star-a-delay": `-${rnd(0, 5).toFixed(2)}s`,
 		"--star-b-delay": `-${rnd(0, 5).toFixed(2)}s`,
+		// the repeating background field fills any row height, including image
+		// messages; the offsets keep two rows from tiling in lockstep
+		"--star-bg-x": `${Math.round(rnd(0, 160))}px`,
+		"--star-bg-y": `${Math.round(rnd(0, 120))}px`,
 	};
 }
