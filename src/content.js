@@ -3844,6 +3844,34 @@ function scheduleBitchatReplace(delay = 80) {
   }, delay);
 }
 
+function observePeopleBadges() {
+  if (typeof MutationObserver !== "function" || !document.body) return;
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.type === "characterData") {
+        const parent = record.target.parentElement;
+        if (parent?.closest(".ag-users-row, .ag-users-name")) {
+          markBetterClients(true);
+          return;
+        }
+        continue;
+      }
+      if (record.target instanceof Element && record.target.closest(".ag-users-row")) {
+        markBetterClients(true);
+        return;
+      }
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (node.matches(".ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name")) {
+          markBetterClients(true);
+          return;
+        }
+      }
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+
 function observeSettingsModal() {
   if (typeof MutationObserver !== "function" || !document.body) return;
   const observer = new MutationObserver((records) => {
@@ -4334,6 +4362,19 @@ function updateFlairJoins() {
         row.dataset.baFlairVars = JSON.stringify(saved);
       } catch {}
     }
+    if (topJoin && (flair === "rain" || flair === "aurora")) {
+      try {
+        const prefix = flair === "rain" ? "--rain-" : "--aur-";
+        const saved = JSON.parse(row.dataset.baFlairVars || "{}");
+        const source = JSON.parse(prev.dataset.baFlairVars || "{}");
+        for (const [key, value] of Object.entries(source)) {
+          if (!key.startsWith(prefix)) continue;
+          row.style.setProperty(key, String(value));
+          saved[key] = value;
+        }
+        row.dataset.baFlairVars = JSON.stringify(saved);
+      } catch {}
+    }
     if (flair === "stars") syncStarBandDensity(row);
     const topGap = topJoin ? Math.min(16, Math.max(0, rectOf(row).top - rectOf(prev).bottom)) : 0;
     const bottomGap = bottomJoin ? Math.min(16, Math.max(0, rectOf(next).top - rectOf(row).bottom)) : 0;
@@ -4561,11 +4602,11 @@ function syncPeerClientPill(modal) {
   }
 }
 
-function markBetterClients() {
+function markBetterClients(force = false) {
   if (!state.enabledReady || state.settings.enabled === false) return;
   const now = Date.now();
   const elapsed = now - (state.lastBetterClients || 0);
-  if (elapsed < 500) {
+  if (!force && elapsed < 500) {
     if (state.betterClientsTimer === null) {
       state.betterClientsTimer = window.setTimeout(() => {
         state.betterClientsTimer = null;
@@ -6202,6 +6243,7 @@ async function init() {
   observePage();
   observeChatLabels();
   observeSettingsModal();
+  observePeopleBadges();
   applyShortcutVisibility();
   scheduleSettingsSync();
   hello();

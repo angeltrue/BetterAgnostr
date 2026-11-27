@@ -272,7 +272,7 @@ export function lightningStrikeMarkup(w, h) {
 
 // embers glow warm; ash is what's left of them, so field B mixes dull greys in
 const EMBER_TINTS = ["#ffb057", "#ff7a18", "#ffd08a", "#ff9d3d", "#ffc46b", "#ff6a00"];
-const ASH_TINTS = ["#8a7f77", "#6d635c", "#b9a89a", "#c9762f", "#7d726a", "#ffa14d"];
+const ASH_TINTS = ["#a89a8f", "#8a7f77", "#d8c2ad", "#e08a3a", "#b58c70", "#ffb066", "#f0c49a"];
 
 // a drifting particle's lateral path, as offsets the keyframes ease through. Signs
 // alternate around a constant `lean` (the line's prevailing draft) so the particle
@@ -1299,7 +1299,7 @@ export function flairVars(raw) {
 			// the bright embers are individual spans (see fireEmberMarkup); this field
 			// is only the dim ash haze behind them, where uniform timing doesn't read
 			// - it's slow, faint, and snuffs out partway up (see flairAshRise).
-			"--ash-field": particleField(5, 68, 5, ASH_TINTS),
+			"--ash-field": particleField(8, 54, 4, ASH_TINTS),
 			"--ash-left": `${Math.round(rnd(8, 40))}px`,
 			"--ash-dur": `${rnd(4.2, 7.5).toFixed(2)}s`,
 			"--ash-delay": `-${rnd(0, 7).toFixed(2)}s`,
