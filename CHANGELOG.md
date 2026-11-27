@@ -2,6 +2,13 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.5 — rain loops and animated star bands
+
+- Reworked rain so drops stay invisible above the message, enter at the top edge, fall through the full row, and fade out at the bottom instead of popping into view or being clipped mid-cycle.
+- Clipped rain horizontally and above the row while still allowing drops and splashes to continue below it, removing phantom droplets outside the message.
+- Replaced the stars flair’s two animated bands with six independently timed star bands plus the full-height repeating field.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.4 — joined flairs, instant Chat labels, theme consistency
 
 - Rows with the same flair now join into one continuous run: no fade or un-flaired seam between them, with the fade reserved for the outer ends of the run.
