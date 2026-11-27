@@ -164,11 +164,11 @@ function starBandMarkup() {
 	return html;
 }
 
-export function flairFxInner(raw) {
+export function flairFxInner(raw, options = {}) {
 	const n = flairName(raw);
 	if (n === "stars") return starBandMarkup();
 	if (n === "aurora") return auroraCurtainMarkup();
-	if (n === "fire") return fireEmberMarkup();
+	if (n === "fire") return fireEmberMarkup(!!options.spread);
 	if (n === "rain") return rainDropMarkup();
 	if (n === "plume") return plumePuffMarkup();
 	// neon's fx layer holds the one part of it that isn't tube: the segment that
@@ -178,10 +178,10 @@ export function flairFxInner(raw) {
 	if (n === "matrix") return matrixColumnMarkup();
 	if (n === "sonar") return sonarPingMarkup();
 	if (n === "fireflies") return fireflyMarkup();
-	if (n === "bubbles") return bubbleMarkup();
+	if (n === "bubbles") return bubbleMarkup(!!options.spread);
 	// the board is persistent: it is this row's circuitry, not a thing that happens to
 	// it, so it is drawn once and the surge only lights what is already there
-	if (n === "bitcoin") return circuitBoardMarkup();
+	if (n === "bitcoin") return circuitBoardMarkup(Number(options.runHeight) || 0);
 	if (n === "sol") return solRayMarkup();
 	return "";
 }
@@ -304,7 +304,7 @@ function wobble(prefix, amp, lean) {
 const EMBER_MIN = 5;
 const EMBER_MAX = 7;
 
-export function fireEmberMarkup() {
+export function fireEmberMarkup(spread = false) {
 	const count = EMBER_MIN + ((Math.random() * (EMBER_MAX - EMBER_MIN + 1)) | 0);
 	let html = "";
 	for (let i = 0; i < count; i++) {
@@ -312,6 +312,7 @@ export function fireEmberMarkup() {
 		const size = Math.random() < 0.25 ? 3 : 2;
 		const style = [
 			`--e-x:${Math.round(rnd(4, 92))}%`,
+			...(spread ? [`--e-y:${Math.round(rnd(2, 96))}%`] : []),
 			`--e-size:${size}px`,
 			`--e-tint:${pick(EMBER_TINTS)}`,
 			`--e-peak:${rnd(0.62, 1).toFixed(2)}`,
@@ -884,7 +885,7 @@ const BUBBLE_TINTS = ["#5fe0d8", "#7ef0e6", "#a8f7f0", "#4fc8d8", "#6fe8ea", "#c
 const BUBBLE_MIN = 5;
 const BUBBLE_MAX = 8;
 
-export function bubbleMarkup() {
+export function bubbleMarkup(spread = false) {
 	const count = BUBBLE_MIN + ((Math.random() * (BUBBLE_MAX - BUBBLE_MIN + 1)) | 0);
 	let html = "";
 	for (let i = 0; i < count; i++) {
@@ -899,6 +900,7 @@ export function bubbleMarkup() {
 		const size = Math.round(rnd(4, 10));
 		const style = [
 			`--b-x:${Math.round(rnd(4, 92))}%`,
+			...(spread ? [`--b-y:${Math.round(rnd(2, 96))}%`] : []),
 			`--b-size:${size}px`,
 			`--b-tint:${pick(BUBBLE_TINTS)}`,
 			`--b-peak:${rnd(0.55, 0.92).toFixed(2)}`,
@@ -1029,8 +1031,9 @@ function cirBranch(x, y) {
 	return cirSeg(x, y, x, y2) + cirSeg(x, y2, x2, y2);
 }
 
-export function circuitBoardMarkup() {
-	const lanes = CIR_LANE_MIN + ((Math.random() * (CIR_LANE_MAX - CIR_LANE_MIN + 1)) | 0);
+export function circuitBoardMarkup(runHeight = 0) {
+	const fitting = runHeight > 0 ? Math.round((runHeight - CIR_LANE_TOP) / CIR_LANE_GAP) : 0;
+	const lanes = Math.max(CIR_LANE_MIN, Math.min(14, Math.max(CIR_LANE_MAX, fitting)));
 	let html = "";
 	for (let i = 0; i < lanes; i++) {
 		let x = 0;

@@ -255,6 +255,7 @@ const state = {
   flairJoinDirty: true,
   flairResizeObserver: null,
   flairIntersection: null,
+  flairSurfaceTargets: new WeakMap(),
   visibleFlairRows: new Set(),
   starBandHeights: new WeakMap(),
   dirtyRows: new Set(),
@@ -2198,27 +2199,26 @@ function injectAppearanceExtras(modal) {
 
 function shootStar(el, delay = 0) {
   if (typeof el.animate !== "function") return;
-  const layer = el.parentElement;
-  const row = layer?.closest(".ag-msg-row") || layer;
-  if (!layer || !row) return;
+  const layer = el;
+  const row = layer.closest(".ag-msg-row");
+  if (!(layer instanceof HTMLElement) || !row) return;
   const line = row.querySelector(".ag-msg-rich") || row.querySelector(".ag-msg-content") || row;
   const layerRect = layer.getBoundingClientRect();
   const lineRect = line.getBoundingClientRect();
   const offsetX = Math.max(0, lineRect.left - layerRect.left);
-  const offsetY = Math.max(0, lineRect.top - layerRect.top);
-  const w = Math.max(60, layerRect.width - offsetX - 4);
-  const h = Math.max(12, lineRect.height);
+  const w = Math.max(60, Math.min(lineRect.width, layerRect.width - offsetX - 4));
+  const h = Math.max(12, layerRect.height - 6);
   const star = document.createElement("span");
   star.className = "ba-shooting-star";
   star.setAttribute("aria-hidden", "true");
   star.style.width = `${(28 + Math.random() * 46).toFixed(1)}px`;
   layer.appendChild(star);
   const startX = offsetX + 4 + Math.random() * Math.max(1, w * 0.86);
-  const startY = offsetY + 3 + Math.random() * Math.max(1, h - 6);
+  const startY = 3 + Math.random() * Math.max(1, h - 6);
   const travel = Math.max(50, Math.min(w - (startX - offsetX) - 8, 70 + Math.random() * 300));
   const angle = 5 + Math.random() * 14;
   const endX = startX + travel;
-  const endY = Math.min(offsetY + h - 2, startY + travel * Math.tan((angle * Math.PI) / 180) * 0.34);
+  const endY = Math.min(h - 2, startY + travel * Math.tan((angle * Math.PI) / 180) * 0.34);
   const rotation = `rotate(${angle.toFixed(1)}deg)`;
   const anim = star.animate(
     [
@@ -2243,8 +2243,10 @@ function ensureFlairObservers() {
     state.flairIntersection = new window.IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting) state.visibleFlairRows.add(entry.target);
-          else state.visibleFlairRows.delete(entry.target);
+          const row = entry.target.closest?.(".ag-msg-row") || entry.target;
+          if (!(row instanceof HTMLElement)) continue;
+          if (entry.isIntersecting) state.visibleFlairRows.add(row);
+          else state.visibleFlairRows.delete(row);
         }
       },
       { rootMargin: "120px 0px" },
@@ -2254,13 +2256,8 @@ function ensureFlairObservers() {
     state.flairResizeObserver = new window.ResizeObserver((entries) => {
       let changed = false;
       for (const entry of entries) {
-        const row = entry.target;
-        if (!(row instanceof HTMLElement) || !row.isConnected) {
-          unobserveFlairRow(row);
-          continue;
-        }
+        if (!(entry.target instanceof HTMLElement) || !entry.target.isConnected) continue;
         markFlairJoinsDirty();
-        if (row.dataset.baFlair === "stars") syncStarBandDensity(row);
         changed = true;
       }
       if (changed) scheduleEnhance();
@@ -2271,15 +2268,31 @@ function ensureFlairObservers() {
 function observeFlairRow(row) {
   if (!(row instanceof HTMLElement)) return;
   ensureFlairObservers();
-  state.flairIntersection?.observe(row);
   state.flairResizeObserver?.observe(row);
+}
+
+function observeFlairSurface(row, surface) {
+  if (!(row instanceof HTMLElement) || !(surface instanceof Element)) return;
+  ensureFlairObservers();
+  const previous = state.flairSurfaceTargets.get(row);
+  if (previous === surface) return;
+  if (previous) state.flairIntersection?.unobserve(previous);
+  state.flairSurfaceTargets.set(row, surface);
+  state.flairIntersection?.observe(surface);
+}
+
+function unobserveFlairSurface(row) {
+  if (!(row instanceof HTMLElement)) return;
+  const surface = state.flairSurfaceTargets.get(row);
+  if (surface) state.flairIntersection?.unobserve(surface);
+  state.flairSurfaceTargets.delete(row);
+  state.visibleFlairRows.delete(row);
 }
 
 function unobserveFlairRow(row) {
   if (!(row instanceof HTMLElement)) return;
-  state.flairIntersection?.unobserve(row);
   state.flairResizeObserver?.unobserve(row);
-  state.visibleFlairRows.delete(row);
+  unobserveFlairSurface(row);
   state.starBandHeights.delete(row);
 }
 
@@ -2356,9 +2369,10 @@ function circuitSurge(el) {
 
 function flairStrike(el) {
   if (typeof el.animate !== "function") return;
-  const row = el.parentElement;
+  if (!(el instanceof HTMLElement)) return;
+  const row = el.closest(".ag-msg-row");
   if (!row) return;
-  el.insertAdjacentHTML("beforeend", lightningStrikeMarkup(row.clientWidth, row.clientHeight));
+  el.insertAdjacentHTML("beforeend", lightningStrikeMarkup(el.clientWidth, el.clientHeight));
   const strike = el.lastElementChild;
   const anim = strike.animate(
     [
@@ -4365,7 +4379,7 @@ function rowDecorationIntact(row, ev) {
   if (row.dataset.baFlairSuppressed) {
     const suppressed = row.dataset.baFlairSuppressed;
     const limit = flairLimit(suppressed);
-    if (limit > 0 && document.querySelectorAll(`.ag-msg-row.flair-${suppressed}`).length < limit) {
+    if (limit > 0 && document.querySelectorAll(`.ag-msg-row[data-ba-flair-host].flair-${suppressed}`).length < limit) {
       delete row.dataset.baFlairSuppressed;
       return false;
     }
@@ -4373,11 +4387,24 @@ function rowDecorationIntact(row, ev) {
   }
   if (!row.querySelector(".ba-json-btn, .ba-row-json-btn")) return false;
   if (row.dataset.baFlair) {
+    const flair = row.dataset.baFlair;
     if (!row.classList.contains("flair")) return false;
-    if (!row.classList.contains(`flair-${row.dataset.baFlair}`)) return false;
-    if (!row.querySelector(":scope > .ba-flair-layer")) return false;
-    if (flairHasFx(row.dataset.baFlair) && !row.querySelector(":scope > .flairFx")) return false;
-    if (flairOverlayInner(row.dataset.baFlair) && !row.querySelector(":scope > .ba-flair-layer > .flairScan")) return false;
+    if (!row.classList.contains(`flair-${flair}`)) return false;
+    const prev = row.previousElementSibling;
+    const host =
+      !(prev instanceof HTMLElement &&
+        prev.classList.contains("ag-msg-row") &&
+        prev.dataset.baFlair === flair);
+    if (row.hasAttribute("data-ba-flair-host") !== host) return false;
+    const layer = row.querySelector(":scope > .ba-flair-layer");
+    if (host) {
+      if (!(layer instanceof HTMLElement)) return false;
+      if (!layer.classList.contains(`flair-${flair}`)) return false;
+      if (flairHasFx(flair) && !row.querySelector(":scope > .flairFx")) return false;
+      if (flairOverlayInner(flair) && !layer.querySelector(":scope > .flairScan")) return false;
+    } else if (layer || row.querySelector(":scope > .flairFx")) {
+      return false;
+    }
     try {
       const expected = JSON.parse(row.dataset.baFlairVars || "{}");
       for (const [key, value] of Object.entries(expected)) {
@@ -4427,6 +4454,7 @@ function repairRowNow(row) {
     ensureRowButtons(row, id);
     markRowClientLabels(row, ev);
     decorateRow(row, ev);
+    syncFlairRunFor(row);
     markFlairJoinsDirty();
     const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
     row.dataset.baDecorated = `${id}:${state.settingsEpoch}:${ownPubkey}`;
@@ -4447,103 +4475,110 @@ function removeRowStyleVar(row, prop) {
   if (row.style.getPropertyValue(prop)) row.style.removeProperty(prop);
 }
 
-function updateFlairJoins() {
+function flairRunFor(row) {
+  if (!(row instanceof HTMLElement) || !row.dataset.baFlair) return null;
+  const flair = row.dataset.baFlair;
+  const sameFlair = (el) =>
+    el instanceof HTMLElement &&
+    el.classList.contains("ag-msg-row") &&
+    el.dataset.baFlair === flair;
+  let host = row;
+  while (sameFlair(host.previousElementSibling)) host = host.previousElementSibling;
+  let last = row;
+  while (sameFlair(last.nextElementSibling)) last = last.nextElementSibling;
+  return { flair, host, last };
+}
+
+function syncFlairRun(run) {
+  if (!run) return;
+  const { flair, host, last } = run;
+  const quiet = !!state.settings.studio.reduceMotion;
+  let row = host;
+  while (row) {
+    const isHost = row === host;
+    const wasHost = row.hasAttribute("data-ba-flair-host");
+    row.toggleAttribute("data-ba-flair-host", isHost);
+    row.classList.toggle("ba-flair-host", isHost);
+    row.classList.toggle("ba-flair-member", !isHost);
+    if (!isHost && wasHost) {
+      clearFlairSurface(row);
+      removeRowStyleVar(row, "--ba-flair-run-extra");
+      removeRowStyleVar(row, "--ba-flair-host-height");
+    }
+    if (row === last) break;
+    const next = row.nextElementSibling;
+    if (!(next instanceof HTMLElement) || !next.classList.contains("ag-msg-row") || next.dataset.baFlair !== flair) break;
+    row = next;
+  }
+  const hostRect = host.getBoundingClientRect();
+  const lastRect = last.getBoundingClientRect();
+  const extra = Math.max(0, lastRect.bottom - hostRect.bottom);
+  const runHeight = Math.max(1, lastRect.bottom - hostRect.top);
+  setRowStyleVar(host, "--ba-flair-run-extra", `${Math.round(extra)}px`);
+  setRowStyleVar(host, "--ba-flair-host-height", `${Math.round(hostRect.height)}px`);
+  ensureFlairSurface(host, flair, runHeight, hostRect.height);
+  const layer = host.querySelector(":scope > .ba-flair-layer");
+  layer?.classList.toggle("flairQuiet", quiet);
+  const fx = host.querySelector(":scope > .flairFx");
+  fx?.classList.toggle("flairQuiet", quiet);
+  if (flair === "stars") syncStarBandDensity(host, runHeight);
+}
+
+function syncFlairRunFor(row) {
+  const run = flairRunFor(row);
+  if (run) syncFlairRun(run);
+}
+
+function syncFlairRuns() {
   if (!state.enabledReady || state.settings.enabled === false) return;
   if (!state.flairJoinDirty) return;
-  if (!document.querySelector(".ag-msg-row[data-ba-flair]")) {
-    state.flairJoinDirty = false;
-    return;
-  }
   const now = performance.now();
   const elapsed = now - (state.lastFlairJoinAt || 0);
-  if (elapsed < 250) {
+  if (elapsed < 100) {
     if (state.flairJoinTimer === null) {
       state.flairJoinTimer = window.setTimeout(() => {
         state.flairJoinTimer = null;
-        updateFlairJoins();
-      }, 250 - elapsed + 20);
+        syncFlairRuns();
+      }, 100 - elapsed + 16);
     }
     return;
   }
   state.lastFlairJoinAt = now;
   state.flairJoinDirty = false;
-  const rectCache = new Map();
-  const rectOf = (el) => {
-    if (!(el instanceof HTMLElement)) return null;
-    let rect = rectCache.get(el);
-    if (!rect) {
-      rect = el.getBoundingClientRect();
-      rectCache.set(el, rect);
+  const seen = new Set();
+  for (const row of document.querySelectorAll(".ag-msg-row[data-ba-flair]")) {
+    if (seen.has(row)) continue;
+    const run = flairRunFor(row);
+    if (!run) continue;
+    let walk = run.host;
+    while (walk) {
+      seen.add(walk);
+      if (walk === run.last) break;
+      walk = walk.nextElementSibling;
     }
-    return rect;
-  };
-  const flaired = [...document.querySelectorAll(".ag-msg-row[data-ba-flair]")];
-  for (const row of flaired) {
-    const flair = row.dataset.baFlair;
-    const prev = row.previousElementSibling;
-    const next = row.nextElementSibling;
-    const topJoin =
-      prev instanceof HTMLElement &&
-      prev.classList.contains("ag-msg-row") &&
-      prev.dataset.baFlair === flair;
-    const bottomJoin =
-      next instanceof HTMLElement &&
-      next.classList.contains("ag-msg-row") &&
-      next.dataset.baFlair === flair;
-    if (topJoin && (flair === "neon" || flair === "rain" || flair === "aurora")) {
-      try {
-        const keys = flair === "neon" ? ["--neon-lit", "--neon-halo"] : null;
-        const prefix = flair === "rain" ? "--rain-" : flair === "aurora" ? "--aur-" : "";
-        const saved = JSON.parse(row.dataset.baFlairVars || "{}");
-        const source = JSON.parse(prev.dataset.baFlairVars || "{}");
-        let changed = false;
-        for (const [key, value] of Object.entries(source)) {
-          if (keys && !keys.includes(key)) continue;
-          if (!keys && !key.startsWith(prefix)) continue;
-          const nextValue = String(value);
-          if (row.style.getPropertyValue(key) !== nextValue) row.style.setProperty(key, nextValue);
-          if (saved[key] !== nextValue) {
-            saved[key] = nextValue;
-            changed = true;
-          }
-        }
-        if (changed) row.dataset.baFlairVars = JSON.stringify(saved);
-      } catch {}
-    }
-    if (flair === "stars") syncStarBandDensity(row);
-    const topGap = topJoin ? Math.min(16, Math.max(0, rectOf(row).top - rectOf(prev).bottom)) : 0;
-    const bottomGap = bottomJoin ? Math.min(16, Math.max(0, rectOf(next).top - rectOf(row).bottom)) : 0;
-    if (row.hasAttribute("data-ba-flair-join-top") !== topJoin) row.toggleAttribute("data-ba-flair-join-top", topJoin);
-    if (row.hasAttribute("data-ba-flair-join-bottom") !== bottomJoin) row.toggleAttribute("data-ba-flair-join-bottom", bottomJoin);
-    if (topJoin) setRowStyleVar(row, "--ba-flair-bleed-top", `${Math.round(topGap)}px`);
-    else removeRowStyleVar(row, "--ba-flair-bleed-top");
-    if (bottomJoin) setRowStyleVar(row, "--ba-flair-bleed-bottom", `${Math.round(bottomGap)}px`);
-    else removeRowStyleVar(row, "--ba-flair-bleed-bottom");
-    if (flair === "rain") {
-      const extra = bottomJoin ? Math.max(0, rectOf(next).bottom - rectOf(row).bottom) : 0;
-      setRowStyleVar(row, "--rain-drop-extra", `${Math.round(extra)}px`);
-    } else {
-      removeRowStyleVar(row, "--rain-drop-extra");
-    }
+    syncFlairRun(run);
   }
-  // A row that lost its flair must not keep stale join styling.
-  for (const row of document.querySelectorAll("[data-ba-flair-join-top], [data-ba-flair-join-bottom]")) {
-    if (row instanceof HTMLElement && row.dataset.baFlair) continue;
-    row.removeAttribute("data-ba-flair-join-top");
-    row.removeAttribute("data-ba-flair-join-bottom");
-    if (row instanceof HTMLElement) {
-      removeRowStyleVar(row, "--ba-flair-bleed-top");
-      removeRowStyleVar(row, "--ba-flair-bleed-bottom");
-      removeRowStyleVar(row, "--rain-drop-extra");
-    }
+  // Remove a surface/role left behind by a row that was repurposed or stripped.
+  for (const row of document.querySelectorAll(".ag-msg-row.ba-flair-host, .ag-msg-row.ba-flair-member")) {
+    if (row.dataset.baFlair) continue;
+    row.removeAttribute("data-ba-flair-host");
+    row.classList.remove("ba-flair-host", "ba-flair-member");
+    clearFlairSurface(row);
+    removeRowStyleVar(row, "--ba-flair-run-extra");
+    removeRowStyleVar(row, "--ba-flair-host-height");
+  }
+  for (const surface of document.querySelectorAll(".ag-msg-row > .ba-flair-layer, .ag-msg-row > .flairFx")) {
+    const row = surface.parentElement;
+    if (row instanceof HTMLElement && row.dataset.baFlair && row.hasAttribute("data-ba-flair-host")) continue;
+    if (row instanceof HTMLElement) clearFlairSurface(row);
   }
 }
 
-function syncStarBandDensity(row) {
+function syncStarBandDensity(row, runHeight = 0) {
   if (!(row instanceof HTMLElement) || row.dataset.baFlair !== "stars") return;
   const fx = row.querySelector(":scope > .flairFx");
   if (!fx) return;
-  const height = row.getBoundingClientRect().height;
+  const height = runHeight > 0 ? runHeight : row.getBoundingClientRect().height;
   if (state.starBandHeights.get(row) === height) return;
   state.starBandHeights.set(row, height);
   const count = height < 64 ? 1 : height < 100 ? 2 : height < 150 ? 3 : height < 220 ? 4 : 6;
@@ -4613,7 +4648,7 @@ function decorateRows() {
       if (row.isConnected) decorateRowElement(row);
     }
   }
-  updateFlairJoins();
+  syncFlairRuns();
 }
 
 function ensureRowButtons(row, id) {
@@ -5059,29 +5094,90 @@ function applyLineStyles(row, meta) {
   applyLineClasses(root, "ba-line-msg", msgVis, row);
 }
 
+function clearFlairSurface(row) {
+  if (!(row instanceof HTMLElement)) return;
+  unobserveFlairSurface(row);
+  state.starBandHeights.delete(row);
+  row
+    .querySelectorAll(":scope > .ba-flair-layer, :scope > .flairFx, :scope > .flairScan, :scope > .ba-flair-fx, :scope > .ba-shooting-star")
+    .forEach((node) => node.remove());
+}
+
 function clearFlair(row) {
   unobserveFlairRow(row);
+  clearFlairSurface(row);
   state.starBandHeights.delete(row);
   markFlairJoinsDirty();
   row.removeAttribute("data-ba-flair-join-top");
   row.removeAttribute("data-ba-flair-join-bottom");
+  row.removeAttribute("data-ba-flair-host");
+  row.classList.remove("flair", "ba-flair", "flairQuiet", "ba-flair-static", "ba-flair-host", "ba-flair-member");
   removeRowStyleVar(row, "--ba-flair-bleed-top");
   removeRowStyleVar(row, "--ba-flair-bleed-bottom");
+  removeRowStyleVar(row, "--ba-flair-run-extra");
+  removeRowStyleVar(row, "--ba-flair-host-height");
   removeRowStyleVar(row, "--rain-drop-extra");
-  row.classList.remove("flair", "ba-flair", "flairQuiet", "ba-flair-static");
   for (const cls of [...row.classList]) {
     if (cls.startsWith("ba-flair-") || cls.startsWith("flair-")) row.classList.remove(cls);
   }
-  row.querySelectorAll(":scope > .ba-flair-layer, :scope > .flairFx, :scope > .flairScan, :scope > .ba-flair-fx").forEach((n) => n.remove());
   row.removeAttribute("data-ba-flair");
   row.removeAttribute("data-flair");
   delete row.dataset.baFlairVars;
+  delete row.dataset.baFlairSuppressed;
 }
 
 function flairStyleVars(vars) {
   return Object.entries(vars || {})
     .map(([k, v]) => `${k}:${v}`)
     .join(";");
+}
+
+function ensureFlairSurface(host, flair, runHeight = 0, hostHeight = 0) {
+  const classes = flairClass(flair).split(" ").filter(Boolean);
+  const quiet = !!state.settings.studio.reduceMotion;
+  const spreadFlair = flair === "fire" || flair === "bubbles";
+  const spread = spreadFlair && runHeight > 0 && hostHeight > 0 && runHeight > hostHeight + 12;
+  const fxKey = spreadFlair
+    ? `${flair}:${spread ? "spread" : "base"}`
+    : flair === "bitcoin"
+      ? `bitcoin:${Math.ceil(runHeight / 48)}`
+      : flair;
+  let layer = host.querySelector(":scope > .ba-flair-layer");
+  const layerMatches = layer && classes.every((cls) => layer.classList.contains(cls));
+  if (!layerMatches) {
+    layer?.remove();
+    layer = document.createElement("span");
+    layer.className = "ba-flair-layer";
+    layer.setAttribute("aria-hidden", "true");
+    for (const cls of classes) layer.classList.add(cls);
+    host.prepend(layer);
+  }
+  const overlay = flairOverlayInner(flair);
+  if (overlay && !layer.querySelector(":scope > .flairScan")) {
+    layer.insertAdjacentHTML("beforeend", overlay);
+  } else if (!overlay) {
+    layer.querySelectorAll(":scope > .flairScan").forEach((node) => node.remove());
+  }
+  layer.classList.toggle("flairQuiet", quiet);
+
+  let fx = host.querySelector(":scope > .flairFx");
+  if (flairHasFx(flair)) {
+    if (!fx || fx.dataset.baFlairFx !== fxKey) {
+      fx?.remove();
+      fx = document.createElement("span");
+      fx.className = "flairFx";
+      fx.dataset.baFlairFx = fxKey;
+      fx.setAttribute("aria-hidden", "true");
+      fx.innerHTML = flairFxInner(flair, { spread, runHeight });
+      layer.after(fx);
+    }
+    fx.classList.toggle("flairQuiet", quiet);
+    observeFlairSurface(host, fx);
+  } else {
+    fx?.remove();
+    observeFlairSurface(host, layer);
+  }
+  return { layer, fx };
 }
 
 function applyFlair(row, ev, flair) {
@@ -5092,19 +5188,24 @@ function applyFlair(row, ev, flair) {
     return;
   }
   const classes = flairClass(flair).split(" ").filter(Boolean);
+  const prev = row.previousElementSibling;
+  const sameFlairAbove =
+    prev instanceof HTMLElement &&
+    prev.classList.contains("ag-msg-row") &&
+    prev.dataset.baFlair === flair;
   const limit = flairLimit(flair);
-  if (limit > 0 && !row.classList.contains(`flair-${flair}`)) {
-    const active = document.querySelectorAll(`.ag-msg-row.flair-${flair}`).length;
+  if (limit > 0 && !sameFlairAbove) {
+    let active = 0;
+    for (const el of document.querySelectorAll(`.ag-msg-row[data-ba-flair-host].flair-${flair}`)) {
+      if (el !== row) active += 1;
+    }
     if (active >= limit) {
       clearFlair(row);
       row.dataset.baFlairSuppressed = flair;
       return;
     }
-    delete row.dataset.baFlairSuppressed;
   }
-  const layer = row.querySelector(":scope > .ba-flair-layer");
-  const hasFx = !flairHasFx(flair) || !!row.querySelector(":scope > .flairFx");
-  const hasScan = !flairOverlayInner(flair) || !!layer?.querySelector(":scope > .flairScan");
+  delete row.dataset.baFlairSuppressed;
   const hasClasses = classes.every((cls) => row.classList.contains(cls));
   const quiet = !!state.settings.studio.reduceMotion;
   let hasVars = false;
@@ -5115,9 +5216,12 @@ function applyFlair(row, ev, flair) {
       ? row.dataset.baFlairVars === "{}"
       : entries.every(([k, v]) => row.style.getPropertyValue(k) === String(v));
   } catch {}
-  if (row.dataset.baFlair === flair && hasClasses && layer && hasFx && hasScan && hasVars) {
+  if (row.dataset.baFlair === flair && hasClasses && hasVars) {
     row.classList.toggle("flairQuiet", quiet);
-    layer.classList.toggle("flairQuiet", quiet);
+    const host = !sameFlairAbove;
+    row.toggleAttribute("data-ba-flair-host", host);
+    row.classList.toggle("ba-flair-host", host);
+    row.classList.toggle("ba-flair-member", !host);
     return;
   }
   clearFlair(row);
@@ -5127,25 +5231,10 @@ function applyFlair(row, ev, flair) {
   row.dataset.baFlair = flair;
   for (const [k, v] of Object.entries(vars)) row.style.setProperty(k, v);
   if (quiet) row.classList.add("flairQuiet");
-
-  const wrap = document.createElement("span");
-  wrap.className = "ba-flair-layer";
-  wrap.setAttribute("aria-hidden", "true");
-  for (const cls of classes) wrap.classList.add(cls);
-  if (quiet) wrap.classList.add("flairQuiet");
-  const overlay = flairOverlayInner(flair);
-  if (overlay) wrap.insertAdjacentHTML("beforeend", overlay);
-  row.prepend(wrap);
-  if (flairHasFx(flair)) {
-    // Keep animated FX outside the clipped background layer so particles,
-    // puffs, curtains, and bolts can travel past the row edge.
-    const fx = document.createElement("span");
-    fx.className = "flairFx";
-    fx.setAttribute("aria-hidden", "true");
-    fx.innerHTML = flairFxInner(flair);
-    wrap.after(fx);
-    if (flair === "stars") syncStarBandDensity(row);
-  }
+  const host = !sameFlairAbove;
+  row.toggleAttribute("data-ba-flair-host", host);
+  row.classList.toggle("ba-flair-host", host);
+  row.classList.toggle("ba-flair-member", !host);
   observeFlairRow(row);
 }
 
