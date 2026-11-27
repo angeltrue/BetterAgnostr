@@ -50,15 +50,12 @@ await cp(path.join(src, "popup.html"), path.join(dist, "popup.html"));
 await cp(path.join(src, "popup.css"), path.join(dist, "popup.css"));
 await cp(path.join(src, "popup.js"), path.join(dist, "popup.js"));
 
+// Icons are pre-rendered and committed so builds do not depend on ImageMagick.
 for (const size of [16, 32, 48, 128]) {
-  execFileSync("convert", [
-    "-background",
-    "none",
-    "-resize",
-    `${size}x${size}`,
-    path.join(src, "icons", "icon.svg"),
+  await cp(
+    path.join(src, "icons", `icon-${size}.png`),
     path.join(dist, "icons", `icon-${size}.png`),
-  ]);
+  );
 }
 
 const pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
