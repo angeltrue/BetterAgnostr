@@ -7,6 +7,7 @@
 - Rows with the same flair now remove the edge fade between them, extend across the gap, and square off shared corners. The fade only appears at the outer ends of a run.
 - Grouped messages and normal consecutive messages both connect correctly.
 - Different flairs still fade separately at their boundaries.
+- Moved animated flair effects outside the clipped background layer, so puffs, curtains, embers, rain, bolts, and shooting stars can extend past the row instead of being cut off mid-animation.
 - Bitchat labels are replaced synchronously in the DOM mutation observer, before the next paint, so they no longer flash before becoming Chat.
 - Removed the CSS custom-property cycle that forced event-viewer and custom-action dialog text to use the dark fallback on light themes. Both now follow the active Agnostr theme.
 

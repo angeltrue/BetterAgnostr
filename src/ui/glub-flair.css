@@ -2521,6 +2521,12 @@ html.retro .flairScan {
   display: none !important;
   pointer-events: none;
 }
+.ag-msg-row > .flairFx {
+  position: absolute !important;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .ag-msg-row > .ba-flair-layer {
   position: absolute !important;
   top: calc(-1 * var(--ba-flair-bleed-top, 0px)) !important;
@@ -2572,9 +2578,9 @@ html.retro .flairScan {
   z-index: 1;
 }
 
-.ag-msg-row > .ba-flair-layer.flair-stars > .flairFx,
-.ag-msg-row > .ba-flair-layer.flair-stars > .ba-shooting-star {
-  z-index: 2;
+.ag-msg-row.flair-stars > .flairFx,
+.ag-msg-row.flair-stars > .ba-shooting-star {
+  z-index: 0;
 }
 
 .ag-msg-row.flair-stars {
