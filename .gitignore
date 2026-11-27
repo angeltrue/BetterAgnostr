@@ -7,5 +7,6 @@ web-ext-artifacts/
 .release/
 .gitlab-token
 
-# Local-only internal robustness audit. Never publish or commit.
+# Local-only internal audits. Never publish or commit.
 /ROBUSTNESS-AUDIT.md
+/PERFORMANCE-AUDIT.md

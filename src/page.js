@@ -76,12 +76,15 @@ import { VERSION } from "./lib/version.js";
     callDrops: 0,
     preparedCount: 0,
     verifiedIncoming: new Set(),
+    peerIndex: new Map(),
+    lastStatusSignature: "",
     postSeq: 0,
   };
 
   const preparedEvents = new WeakSet();
   const nip07Wrappers = new WeakMap();
   const signerPatches = new Map();
+  const parsedFrames = new WeakMap();
 
   // Better Agnostr owns message chimes while it is active. Leave native
   // notifications, ringtone, and vibration intact.
@@ -244,7 +247,14 @@ import { VERSION } from "./lib/version.js";
     }
     if (data.type === "getRecent") {
       const limit = Math.min(500, Math.max(1, Number(data.payload?.limit) || 100));
-      post("recent", { events: state.eventOrder.slice(-limit).map((id) => state.events.get(id)).filter(Boolean) }, data.id);
+      post(
+        "recent",
+        {
+          events: state.eventOrder.slice(-limit).map((id) => state.events.get(id)).filter(Boolean),
+          peers: [...state.peerIndex.values()].slice(-2000),
+        },
+        data.id,
+      );
       return;
     }
     if (data.type === "getLogs") {
@@ -342,6 +352,17 @@ import { VERSION } from "./lib/version.js";
         if (old) state.events.delete(old);
       }
     }
+    const peer = peerSummary(ev);
+    if (peer && peer.pubkey) {
+      const pubkey = String(peer.pubkey).toLowerCase();
+      const previous = state.peerIndex.get(pubkey);
+      if (!previous || peer.at >= previous.at) state.peerIndex.set(pubkey, peer);
+      while (state.peerIndex.size > 2000) {
+        const first = state.peerIndex.keys().next().value;
+        if (!first) break;
+        state.peerIndex.delete(first);
+      }
+    }
   }
 
   function findEvent(id) {
@@ -431,6 +452,14 @@ import { VERSION } from "./lib/version.js";
     state.logTimer = window.setTimeout(flushLogs, 120);
   }
 
+  function compactLog(log) {
+    if (!log.event) return log;
+    if (log.dir === "in" && ALERT_KINDS.has(Number(log.kind))) return log;
+    const rest = { ...log };
+    delete rest.event;
+    return rest;
+  }
+
   function flushLogs() {
     state.logTimer = null;
     if (!state.logBatch.length) return;
@@ -438,14 +467,15 @@ import { VERSION } from "./lib/version.js";
     state.logs.push(...batch);
     trimLogs();
     if (state.settings.inspector.paused) {
-      // The inspector can be paused, but incoming events must still reach the
-      // content script for chimes and the event store.
+      // The inspector can be paused, but alert events must still reach the
+      // content script for chimes and banners.
       const incoming = batch.filter((log) => log.dir === "in" && log.event);
       if (incoming.length) post("logs", { logs: incoming.slice(-200) });
       return;
     }
-    for (let i = 0; i < batch.length; i += 200) {
-      post("logs", { logs: batch.slice(i, i + 200) });
+    const sendable = batch.length > 300 ? batch.slice(-300) : batch;
+    for (let i = 0; i < sendable.length; i += 200) {
+      post("logs", { logs: sendable.slice(i, i + 200).map(compactLog) });
     }
   }
 
@@ -462,21 +492,42 @@ import { VERSION } from "./lib/version.js";
     return `kind ${ev.kind} · ${ev.id.slice(0, 8)}… · ${ev.content.slice(0, 48).replace(/\s+/g, " ")}`;
   }
 
-  function handleIncomingFrame(data, url) {
-    if (!state.active) return;
-    if (typeof data !== "string") return;
+  function peerSummary(ev) {
+    const name = getTagValue(ev.tags, "n");
+    const client = getTagValue(ev.tags, "client");
+    if (!name && !client) return null;
+    return {
+      pubkey: ev.pubkey,
+      name: String(name || ""),
+      client: String(client || ""),
+      at: Number(ev.created_at) || 0,
+    };
+  }
+
+  function parseFrame(data, sourceEvent) {
+    if (sourceEvent && parsedFrames.has(sourceEvent)) return parsedFrames.get(sourceEvent);
     let frame;
     try {
       frame = JSON.parse(data);
     } catch {
-      return;
+      return null;
     }
-    if (!Array.isArray(frame)) return;
+    if (!Array.isArray(frame)) return null;
+    if (sourceEvent) parsedFrames.set(sourceEvent, frame);
+    return frame;
+  }
+
+  function handleIncomingFrame(data, url, sourceEvent) {
+    if (!state.active) return;
+    if (typeof data !== "string") return;
+    const frame = parseFrame(data, sourceEvent);
+    if (!frame) return;
     const type = frame[0];
     if (type === "EVENT") {
       const ev = frame[2];
       if (isValidEvent(ev)) {
-        if (!state.verifiedIncoming.has(ev.id)) {
+        const mustVerify = ALERT_KINDS.has(Number(ev.kind));
+        if (mustVerify && !state.verifiedIncoming.has(ev.id)) {
           let valid = false;
           try {
             valid = verifyEvent(ev);
@@ -511,8 +562,14 @@ import { VERSION } from "./lib/version.js";
           });
           return;
         }
-        rememberEvent(ev, { dir: "in", relay: url });
-        pushFrameLog({ dir: "in", relay: url, type, eventId: ev.id, kind: ev.kind, event: ev, summary: summarizeEvent(ev) });
+        rememberEvent(ev);
+        const log = { dir: "in", relay: url, type, eventId: ev.id, kind: ev.kind, summary: summarizeEvent(ev) };
+        const peer = peerSummary(ev);
+        if (peer) log.peer = peer;
+        // Keep the full event only where the UI needs it for a chime/banner.
+        // All other events are fetched on demand from the page store.
+        if (mustVerify) log.event = ev;
+        pushFrameLog(log);
       }
       return;
     }
@@ -545,7 +602,10 @@ import { VERSION } from "./lib/version.js";
     if (frame[0] === "EVENT" && isValidEvent(frame[1])) {
       const ev = frame[1];
       rememberEvent(ev, { dir: "out", relay: url });
-      pushFrameLog({ dir: "out", relay: url, type: "EVENT", eventId: ev.id, kind: ev.kind, event: ev, summary: summarizeEvent(ev) });
+      const log = { dir: "out", relay: url, type: "EVENT", eventId: ev.id, kind: ev.kind, summary: summarizeEvent(ev) };
+      const peer = peerSummary(ev);
+      if (peer) log.peer = peer;
+      pushFrameLog(log);
       return;
     }
     pushFrameLog({
@@ -563,6 +623,9 @@ import { VERSION } from "./lib/version.js";
   }
 
   const CALL_KINDS = new Set([25050, 25051, 25052, 25053, 25054, 25055, 25058, 25059]);
+  // Only events that can trigger a notification are verified on the hot path.
+  // Everything else is verified on demand when the viewer asks for it.
+  const ALERT_KINDS = new Set([20000, 23333, 4, 14, 1059, ...CALL_KINDS]);
 
   function isCallEvent(ev) {
     if (!ev || typeof ev !== "object") return false;
@@ -579,16 +642,14 @@ import { VERSION } from "./lib/version.js";
     return ["OK", oldId, frame[2], frame[3]];
   }
 
-  function prepareIncomingData(data) {
+  function prepareIncomingData(data, sourceEvent) {
     if (!state.active) return { drop: false, data, translated: false };
     if (typeof data !== "string") return { drop: false, data, translated: false };
-    let frame;
-    try {
-      frame = JSON.parse(data);
-    } catch {
-      return { drop: false, data, translated: false };
-    }
-    if (!Array.isArray(frame)) return { drop: false, data, translated: false };
+    const isEvent = data.startsWith('["EVENT"');
+    const isOk = data.startsWith('["OK"');
+    if (!isEvent && !isOk) return { drop: false, data, translated: false };
+    const frame = parseFrame(data, sourceEvent);
+    if (!frame) return { drop: false, data, translated: false };
     const calls = state.settings.privacy.calls;
     if (calls.disable && calls.blockSignals && frame[0] === "EVENT" && isCallEvent(frame[2])) {
       // handleIncomingFrame logs/counts this once for every socket frame; the
@@ -613,11 +674,11 @@ import { VERSION } from "./lib/version.js";
     const wrapped = function (event) {
       let data = event?.data;
       let translated = false;
-      const prepared = prepareIncomingData(data);
+      const prepared = prepareIncomingData(data, event);
       if (prepared.drop) return;
       if (!seenFrames.has(event)) {
         seenFrames.add(event);
-        handleIncomingFrame(data, url);
+        handleIncomingFrame(data, url, event);
       }
       if (prepared.translated) {
         data = prepared.data;
@@ -651,7 +712,7 @@ import { VERSION } from "./lib/version.js";
     nativeAdd.call(ws, "message", (event) => {
       if (!seenFrames.has(event)) {
         seenFrames.add(event);
-        handleIncomingFrame(event?.data, url);
+        handleIncomingFrame(event?.data, url, event);
       }
     });
 
@@ -1686,9 +1747,9 @@ import { VERSION } from "./lib/version.js";
       type: "EVENT",
       eventId: signed.id,
       kind: signed.kind,
-      event: signed,
       aliasOf: original.id,
       summary: summarizeEvent(signed),
+      peer: peerSummary(signed),
     });
   }
 
@@ -1706,6 +1767,25 @@ import { VERSION } from "./lib/version.js";
     try {
       nickname = localStorage.getItem("agnostr:v2:nickname") || "";
     } catch {}
+    const relays = relaySnapshot();
+    // High-frequency counters (events, logs, sockets) are intentionally not
+    // part of the change key. Otherwise every relay event would force a full
+    // structured-clone status message even when nothing actionable changed.
+    const signature = [
+      state.signerHooked,
+      state.signerMode,
+      state.nip07Patched,
+      state.signMode,
+      state.pubkey,
+      state.npub,
+      nickname,
+      build,
+      state.settings.glub.buildFetchedAt,
+      state.settings.privacy.calls.disable,
+      relays.map((relay) => `${relay.url}:${relay.status}:${relay.lastMessageAt}`).join("|"),
+    ].join("~");
+    if (signature === state.lastStatusSignature) return;
+    state.lastStatusSignature = signature;
     post("status", {
       signerHooked: state.signerHooked,
       signerMode: state.signerMode,
@@ -1719,7 +1799,7 @@ import { VERSION } from "./lib/version.js";
       eventCount: state.events.size,
       logCount: state.logs.length,
       socketCount: state.sockets.size,
-      relays: relaySnapshot(),
+      relays,
       callDrops: state.callDrops,
       preparedCount: state.preparedCount,
       startedAt: state.startedAt,
@@ -1741,11 +1821,23 @@ import { VERSION } from "./lib/version.js";
     } catch {}
   }
 
-  function stopActiveWork() {
-    if (state.statusTimer !== null) {
-      window.clearInterval(state.statusTimer);
-      state.statusTimer = null;
+  function callMenuAdded(records) {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (
+          node.matches(".ag-ctx-menu, .ag-ctx-item-label") ||
+          node.querySelector(".ag-ctx-menu, .ag-ctx-item-label")
+        ) {
+          return true;
+        }
+      }
     }
+    return false;
+  }
+
+  function stopActiveWork() {
+    stopStatusTimer();
     if (state.nip07Timer !== null) {
       window.clearInterval(state.nip07Timer);
       state.nip07Timer = null;
@@ -1764,14 +1856,37 @@ import { VERSION } from "./lib/version.js";
     state.started = true;
     startNip07Watch();
     startSignerWatch();
-    if (state.statusTimer === null) {
-      state.statusTimer = window.setInterval(publishStatus, 2500);
-    }
-    state.callObserver = new MutationObserver(() => applyCallPolicy());
+    startStatusTimer();
+    state.callObserver = new MutationObserver((records) => {
+      if (!callMenuAdded(records)) return;
+      applyCallPolicy();
+    });
     try {
       state.callObserver.observe(document.documentElement, { childList: true, subtree: true });
     } catch {}
     publishStatus();
   }
+
+  function startStatusTimer() {
+    if (state.statusTimer !== null || document.hidden) return;
+    state.statusTimer = window.setInterval(publishStatus, 2500);
+  }
+
+  function stopStatusTimer() {
+    if (state.statusTimer === null) return;
+    window.clearInterval(state.statusTimer);
+    state.statusTimer = null;
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      stopStatusTimer();
+      return;
+    }
+    if (state.started && state.active) {
+      startStatusTimer();
+      publishStatus();
+    }
+  });
 
 })();
