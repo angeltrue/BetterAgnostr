@@ -4498,6 +4498,20 @@ function ownBetterClient() {
   );
 }
 
+function textWithoutClientBadge(el) {
+  if (!(el instanceof HTMLElement)) return "";
+  let out = "";
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      return node.parentElement?.closest(".ba-client-badge")
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  while (walker.nextNode()) out += walker.currentNode.nodeValue || "";
+  return out.replace(/\s+/g, " ").trim();
+}
+
 function setBetterName(el, show) {
   if (!(el instanceof HTMLElement)) return;
   let badge = el.querySelector(":scope > .ba-client-badge");
@@ -4632,10 +4646,10 @@ function markBetterClients(force = false) {
   const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
   const ownBetter = ownBetterClient();
   for (const row of document.querySelectorAll(".ag-users-row")) {
-    const handle = row.querySelector(".ag-users-name")?.textContent?.trim().toLowerCase() || "";
+    const nameEl = row.querySelector(".ag-users-name");
+    const handle = textWithoutClientBadge(nameEl).toLowerCase();
     const own = !!ownPubkey && handle.endsWith(`#${ownPubkey.slice(-4)}`);
     const better = knownBetterHandle(handle) || (own && ownBetter);
-    const nameEl = row.querySelector(".ag-users-name");
     setBetterName(nameEl, better);
     if (nameEl instanceof HTMLElement) {
       nameEl.classList.remove("ba-better-spoof", "ba-client-name");
@@ -4651,7 +4665,7 @@ function markBetterClients(force = false) {
       (badge) => badge.textContent?.trim().toLowerCase() === "you",
     );
     const nameEl = modal.querySelector(".ag-peer-modal-name");
-    const label = (nameEl?.textContent || "").replace(/\s+/g, "").toLowerCase();
+    const label = textWithoutClientBadge(nameEl).replace(/\s+/g, "").toLowerCase();
     const better = (isSelf && ownBetter) || knownBetterHandle(label);
     setBetterName(nameEl, better);
     if (nameEl instanceof HTMLElement) {
@@ -4661,7 +4675,7 @@ function markBetterClients(force = false) {
     syncPeerClientPill(modal);
   }
   for (const title of document.querySelectorAll(".ag-sheet-hero-title")) {
-    const label = (title.textContent || "").replace(/\s+/g, "").toLowerCase();
+    const label = textWithoutClientBadge(title).replace(/\s+/g, "").toLowerCase();
     const better = knownBetterHandle(label) || (!!ownPubkey && label.includes(ownPubkey.slice(-4)) && ownBetter);
     setBetterName(title, better);
   }
@@ -5503,7 +5517,7 @@ document.addEventListener(
 // ---------------------------------------------------------------------------
 
 function authorMention(row, event) {
-  let text = row?.querySelector(".ag-msg-author")?.textContent?.trim() || "";
+  let text = textWithoutClientBadge(row?.querySelector(".ag-msg-author"));
   if (/^@[^#\s]+#?[0-9a-f]{0,4}$/i.test(text)) return text.startsWith("@") ? text : `@${text}`;
   const name =
     getTagValue(event?.tags, "n") ||

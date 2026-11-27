@@ -2,6 +2,13 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.9 — People badge loop hotfix
+
+- Fixed the People-list badge observer feedback loop: the inserted BA badge text was being read as part of the display handle, which made the observer remove and re-add the badge indefinitely and trigger Firefox's “slowing down Firefox” warning.
+- Badge/name lookups now strip the badge text before matching handles and client labels.
+- Kept the 1.3.8 bounded rain clip and the 1.3.7 flair behavior unchanged.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.8 — crash hotfix
 
 - Replaced the rain FX clip with a bounded per-row clip instead of a 200vh paint area. The oversized clip could create extremely large compositor surfaces on busy chats and crash the browser.
