@@ -263,8 +263,9 @@ const state = {
   rowsSweptOnce: false,
   lastRowsSweep: 0,
   rowObserver: null,
-  rowObserverRoot: null,
-  lastRowObserverProbe: 0,
+  rowObserverRoots: new Set(),
+  rowObserverStopped: true,
+  rowRootsScanned: false,
   chatLabelRoots: null,
   chatLabelBodyObserver: null,
   settingsEpoch: 0,
@@ -4098,8 +4099,7 @@ function enhanceAll() {
   const observer = state.pageObserver;
   observer?.disconnect();
   state.rowObserver?.disconnect();
-  state.rowObserverRoot = null;
-  state.lastRowObserverProbe = 0;
+  state.rowObserverStopped = true;
   try {
     // Native channel/context menus are sensitive to DOM churn. While one is open,
     // only finish the message-action menu and let the rest wait until it closes.
@@ -4375,11 +4375,30 @@ function ensureToolbars() {
 // data-* attributes survive. The normal enhance pass is deliberately debounced,
 // which leaves a visible flash of unformatted text. Repair the one affected row
 // synchronously from the mutation observer instead, before the next paint.
+function visibleFlairHostCount(flair, exclude = null) {
+  let count = 0;
+  const viewportH = window.innerHeight || document.documentElement.clientHeight || 0;
+  const viewportW = window.innerWidth || document.documentElement.clientWidth || 0;
+  for (const host of document.querySelectorAll(`.ag-msg-row[data-ba-flair-host].flair-${flair}`)) {
+    if (host === exclude) continue;
+    const surface = host.querySelector(":scope > .ba-flair-layer, :scope > .flairFx") || host;
+    if (typeof surface.checkVisibility === "function" && !surface.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })) {
+      continue;
+    }
+    const rect = surface.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    if (rect.bottom < -120 || rect.top > viewportH + 120) continue;
+    if (rect.right < -120 || rect.left > viewportW + 120) continue;
+    count += 1;
+  }
+  return count;
+}
+
 function rowDecorationIntact(row, ev) {
   if (row.dataset.baFlairSuppressed) {
     const suppressed = row.dataset.baFlairSuppressed;
     const limit = flairLimit(suppressed);
-    if (limit > 0 && document.querySelectorAll(`.ag-msg-row[data-ba-flair-host].flair-${suppressed}`).length < limit) {
+    if (limit > 0 && visibleFlairHostCount(suppressed, row) < limit) {
       delete row.dataset.baFlairSuppressed;
       return false;
     }
@@ -4401,7 +4420,7 @@ function rowDecorationIntact(row, ev) {
       if (!(layer instanceof HTMLElement)) return false;
       if (!layer.classList.contains(`flair-${flair}`)) return false;
       if (flairHasFx(flair) && !row.querySelector(":scope > .flairFx")) return false;
-      if (flairOverlayInner(flair) && !layer.querySelector(":scope > .flairScan")) return false;
+      if (flairOverlayInner(flair) && layer.dataset.baOverlay !== flair) return false;
     } else if (layer || row.querySelector(":scope > .flairFx")) {
       return false;
     }
@@ -4634,7 +4653,7 @@ function decorateRows() {
   const fullSweep =
     state.rowsAllDirty ||
     !state.rowsSweptOnce ||
-    now - state.lastRowsSweep > 15000;
+    now - state.lastRowsSweep > 3000;
   if (fullSweep) {
     state.rowsAllDirty = false;
     state.rowsSweptOnce = true;
@@ -5153,10 +5172,15 @@ function ensureFlairSurface(host, flair, runHeight = 0, hostHeight = 0) {
     host.prepend(layer);
   }
   const overlay = flairOverlayInner(flair);
-  if (overlay && !layer.querySelector(":scope > .flairScan")) {
-    layer.insertAdjacentHTML("beforeend", overlay);
-  } else if (!overlay) {
-    layer.querySelectorAll(":scope > .flairScan").forEach((node) => node.remove());
+  if (overlay) {
+    if (layer.dataset.baOverlay !== flair) {
+      layer.querySelectorAll(":scope > .flairScan, :scope > .auroraStar").forEach((node) => node.remove());
+      layer.insertAdjacentHTML("beforeend", overlay);
+      layer.dataset.baOverlay = flair;
+    }
+  } else if (layer.dataset.baOverlay) {
+    layer.querySelectorAll(":scope > .flairScan, :scope > .auroraStar").forEach((node) => node.remove());
+    delete layer.dataset.baOverlay;
   }
   layer.classList.toggle("flairQuiet", quiet);
 
@@ -5168,7 +5192,7 @@ function ensureFlairSurface(host, flair, runHeight = 0, hostHeight = 0) {
       fx.className = "flairFx";
       fx.dataset.baFlairFx = fxKey;
       fx.setAttribute("aria-hidden", "true");
-      fx.innerHTML = flairFxInner(flair, { spread, runHeight });
+      fx.innerHTML = flairFxInner(flair, { spread, runHeight, hostHeight });
       layer.after(fx);
     }
     fx.classList.toggle("flairQuiet", quiet);
@@ -5193,12 +5217,53 @@ function applyFlair(row, ev, flair) {
     prev instanceof HTMLElement &&
     prev.classList.contains("ag-msg-row") &&
     prev.dataset.baFlair === flair;
+  const quiet = !!state.settings.studio.reduceMotion;
+  const host = !sameFlairAbove;
+  const existingLayer = row.querySelector(":scope > .ba-flair-layer");
+  const matchingLayer = existingLayer instanceof HTMLElement && classes.every((cls) => existingLayer.classList.contains(cls));
+
+  if (row.dataset.baFlair === flair || matchingLayer) {
+    // React can strip our row classes or a few style variables on hover/click.
+    // Repair those in place instead of throwing away the layer and FX layer:
+    // rebuilding them restarts every animation for no visual reason.
+    for (const cls of classes) {
+      if (!row.classList.contains(cls)) row.classList.add(cls);
+    }
+    for (const cls of [...row.classList]) {
+      if ((cls === "flair" || cls.startsWith("flair-")) && !classes.includes(cls)) {
+        row.classList.remove(cls);
+      }
+    }
+    let saved = null;
+    try {
+      saved = JSON.parse(row.dataset.baFlairVars || "{}");
+    } catch {
+      saved = null;
+    }
+    if (!saved || !Object.keys(saved).length) {
+      saved = flairVars(flair);
+      row.dataset.baFlairVars = JSON.stringify(saved);
+    }
+    for (const [key, value] of Object.entries(saved)) {
+      if (row.style.getPropertyValue(key) !== String(value)) row.style.setProperty(key, value);
+    }
+    delete row.dataset.baFlairSuppressed;
+    row.dataset.baFlair = flair;
+    row.classList.toggle("flairQuiet", quiet);
+    row.toggleAttribute("data-ba-flair-host", host);
+    row.classList.toggle("ba-flair-host", host);
+    row.classList.toggle("ba-flair-member", !host);
+    const layer = row.querySelector(":scope > .ba-flair-layer");
+    const fx = row.querySelector(":scope > .flairFx");
+    layer?.classList.toggle("flairQuiet", quiet);
+    fx?.classList.toggle("flairQuiet", quiet);
+    observeFlairRow(row);
+    return;
+  }
+
   const limit = flairLimit(flair);
   if (limit > 0 && !sameFlairAbove) {
-    let active = 0;
-    for (const el of document.querySelectorAll(`.ag-msg-row[data-ba-flair-host].flair-${flair}`)) {
-      if (el !== row) active += 1;
-    }
+    const active = visibleFlairHostCount(flair, row);
     if (active >= limit) {
       clearFlair(row);
       row.dataset.baFlairSuppressed = flair;
@@ -5206,24 +5271,6 @@ function applyFlair(row, ev, flair) {
     }
   }
   delete row.dataset.baFlairSuppressed;
-  const hasClasses = classes.every((cls) => row.classList.contains(cls));
-  const quiet = !!state.settings.studio.reduceMotion;
-  let hasVars = false;
-  try {
-    const saved = JSON.parse(row.dataset.baFlairVars || "{}");
-    const entries = Object.entries(saved);
-    hasVars = entries.length === 0
-      ? row.dataset.baFlairVars === "{}"
-      : entries.every(([k, v]) => row.style.getPropertyValue(k) === String(v));
-  } catch {}
-  if (row.dataset.baFlair === flair && hasClasses && hasVars) {
-    row.classList.toggle("flairQuiet", quiet);
-    const host = !sameFlairAbove;
-    row.toggleAttribute("data-ba-flair-host", host);
-    row.classList.toggle("ba-flair-host", host);
-    row.classList.toggle("ba-flair-member", !host);
-    return;
-  }
   clearFlair(row);
   const vars = flairVars(flair);
   row.dataset.baFlairVars = JSON.stringify(vars);
@@ -5231,7 +5278,6 @@ function applyFlair(row, ev, flair) {
   row.dataset.baFlair = flair;
   for (const [k, v] of Object.entries(vars)) row.style.setProperty(k, v);
   if (quiet) row.classList.add("flairQuiet");
-  const host = !sameFlairAbove;
   row.toggleAttribute("data-ba-flair-host", host);
   row.classList.toggle("ba-flair-host", host);
   row.classList.toggle("ba-flair-member", !host);
@@ -6225,6 +6271,19 @@ function copyDiagnostics() {
 
 const INTERNAL_EVENT_KINDS = new Set([25050, 25051, 25052, 25053, 25054, 25055, 25058, 25059, 30078]);
 
+const AGNOSTR_TAB_SELECTOR = [
+  ".ag-rail-bitchat",
+  ".ag-rail-srv",
+  ".ag-rail-tile",
+  ".ag-mtab-btn",
+  ".ag-mobile-tabbar button",
+  ".ag-suite-card",
+  ".ag-srv-mobile-rail",
+  ".ag-conv-item",
+  ".ag-conv-row",
+  ".ag-conv-header",
+].join(",");
+
 const PAGE_RELEVANT_SELECTOR = [
   ".ag-msg-row",
   ".ag-msg-actions",
@@ -6258,25 +6317,38 @@ const PAGE_RELEVANT_SELECTOR = [
   ".ag-ctx-menu",
 ].join(",");
 
+function ensureRowRoot(root) {
+  if (!(root instanceof Element)) return;
+  if (!state.rowObserver) state.rowObserver = new MutationObserver(handlePageMutations);
+  if (state.rowObserverRoots.has(root)) return;
+  state.rowObserverRoots.add(root);
+  if (state.rowObserverStopped) return;
+  try {
+    state.rowObserver.observe(root, { attributes: true, attributeFilter: ["class", "id"], subtree: true });
+  } catch {}
+}
+
 function ensureRowObserver() {
   if (!state.pageObserver) return;
-  if (state.rowObserverRoot?.isConnected) return;
-  const now = performance.now();
-  if (now - (state.lastRowObserverProbe || 0) < 500) return;
-  state.lastRowObserverProbe = now;
-  const sample = document.querySelector(".ag-msg-row");
-  const root = sample?.parentElement;
-  if (!root) {
-    state.rowObserver?.disconnect();
-    state.rowObserver = null;
-    state.rowObserverRoot = null;
-    return;
+  if (!state.rowObserver) state.rowObserver = new MutationObserver(handlePageMutations);
+  if (state.rowObserverStopped) {
+    for (const root of [...state.rowObserverRoots]) {
+      if (!root.isConnected) {
+        state.rowObserverRoots.delete(root);
+        continue;
+      }
+      try {
+        state.rowObserver.observe(root, { attributes: true, attributeFilter: ["class", "id"], subtree: true });
+      } catch {}
+    }
+    state.rowObserverStopped = false;
   }
-  if (state.rowObserverRoot === root) return;
-  state.rowObserver?.disconnect();
-  state.rowObserverRoot = root;
-  state.rowObserver = new MutationObserver(handlePageMutations);
-  state.rowObserver.observe(root, { attributes: true, attributeFilter: ["class"], subtree: true });
+  const sample = document.querySelector(".ag-msg-row");
+  if (sample?.parentElement) ensureRowRoot(sample.parentElement);
+  if (!state.rowRootsScanned) {
+    state.rowRootsScanned = true;
+    for (const row of document.querySelectorAll(".ag-msg-row")) ensureRowRoot(row.parentElement);
+  }
 }
 
 function handlePageMutations(records) {
@@ -6286,6 +6358,8 @@ function handlePageMutations(records) {
   }
   let relevant = false;
   let urgentCallUi = false;
+  let peopleChecked = false;
+  let settingsChecked = false;
   for (const record of records) {
     if (record.type === "childList") {
       const target = record.target;
@@ -6296,7 +6370,10 @@ function handlePageMutations(records) {
         delete row.dataset.baDecorated;
         relevant = true;
       }
-      if (target instanceof Element && target.closest(".ag-users-row")) repairPeopleBadges();
+      if (target instanceof Element && target.closest(".ag-users-row") && !peopleChecked) {
+        repairPeopleBadges();
+        peopleChecked = true;
+      }
       const removedNodes = record.removedNodes.length ? new Set(record.removedNodes) : null;
       for (const node of [...record.addedNodes, ...record.removedNodes]) {
         if (!(node instanceof Element)) continue;
@@ -6307,29 +6384,37 @@ function handlePageMutations(records) {
           else if (node.querySelector(".ag-msg-row")) {
             for (const removedRow of node.querySelectorAll(".ag-msg-row")) unobserveFlairRow(removedRow);
           }
-        }
-        if (!removed && !node.closest(".ag-msg-row")) {
-          if (node.matches(".ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name")) {
-            repairPeopleBadges();
+        } else {
+          if (!node.closest(".ag-msg-row")) {
+            if (!peopleChecked && (node.matches(".ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name"))) {
+              repairPeopleBadges();
+              peopleChecked = true;
+            }
+            if (
+              !settingsChecked &&
+              (node.matches(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section") ||
+                node.querySelector(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section"))
+            ) {
+              syncSettingsIntegration();
+              settingsChecked = true;
+            }
           }
-          if (
-            node.matches(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section") ||
-            node.querySelector(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section")
-          ) {
-            syncSettingsIntegration();
-          }
-        }
-        if (!removed) {
           if (node.matches(".fmtObf") || node.querySelector(".fmtObf")) state.obfNextScan = 0;
           if (node.matches(".ag-msg-row")) {
             markRowDirty(node);
             markFlairJoinsDirty();
+            ensureRowRoot(node.parentElement);
+            relevant = true;
           } else if (!node.closest(".ag-msg-row") && node.querySelector(".ag-msg-row")) {
             markFlairJoinsDirty();
-            for (const addedRow of node.querySelectorAll(".ag-msg-row")) markRowDirty(addedRow);
+            for (const addedRow of node.querySelectorAll(".ag-msg-row")) {
+              markRowDirty(addedRow);
+              ensureRowRoot(addedRow.parentElement);
+            }
+            relevant = true;
           }
         }
-        if (node.matches(PAGE_RELEVANT_SELECTOR) || node.querySelector(PAGE_RELEVANT_SELECTOR)) {
+        if (!relevant && (node.matches(PAGE_RELEVANT_SELECTOR) || node.querySelector(PAGE_RELEVANT_SELECTOR))) {
           relevant = true;
           if (
             node.matches(".ag-sheet, .ag-info-sheet, .ag-ctx-menu, .ag-peer-modal") ||
@@ -6337,7 +6422,6 @@ function handlePageMutations(records) {
           ) {
             urgentCallUi = true;
           }
-          break;
         }
       }
     } else if (record.type === "attributes") {
@@ -6351,6 +6435,7 @@ function handlePageMutations(records) {
             continue;
           }
           markRowDirty(row);
+          relevant = true;
         }
       }
       if (
@@ -6361,7 +6446,6 @@ function handlePageMutations(records) {
         relevant = true;
       }
     }
-    if (relevant) break;
   }
   ensureRowObserver();
   if (!relevant) return;
@@ -6491,6 +6575,21 @@ async function init() {
     }
   }, { capture: true, passive: true });
   document.addEventListener("click", handleGlobalClickSound, true);
+  document.addEventListener(
+    "click",
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest(AGNOSTR_TAB_SELECTOR)) return;
+      markRowsAllDirty();
+      markFlairJoinsDirty();
+      window.setTimeout(() => {
+        markRowsAllDirty();
+        markFlairJoinsDirty();
+        scheduleEnhance(true);
+      }, 60);
+    },
+    true,
+  );
   const runSlashAction = (event) => {
     const ta = composerTextarea();
     if (!(ta instanceof HTMLTextAreaElement) || !/^\/me\s+/i.test(ta.value)) return false;
@@ -6541,8 +6640,7 @@ async function init() {
       state.enhancePending = true;
       state.pageObserver?.disconnect();
       state.rowObserver?.disconnect();
-      state.rowObserverRoot = null;
-      state.lastRowObserverProbe = 0;
+      state.rowObserverStopped = true;
       return;
     }
     state.pageObserverStart?.();
@@ -6592,6 +6690,17 @@ async function init() {
   });
   window.setInterval(tickObfuscation, 250);
   window.setInterval(flairTickerTick, 1800);
+  // A slow independent sweep repairs rows that React replaced without leaving a
+  // useful mutation record (tab switches, recycled list nodes) and retries event
+  // lookups whose bridge response was missed. It is idle-free while the full
+  // enhance pass is already running for real mutations.
+  window.setInterval(() => {
+    if (document.hidden || !state.enabledReady || state.settings.enabled === false) return;
+    if (performance.now() - (state.lastRowsSweep || 0) < 3000) return;
+    if (!document.querySelector(".ag-msg-row")) return;
+    markRowsAllDirty();
+    scheduleEnhance();
+  }, 3000);
   ensureHost();
   observePage();
   observeChatLabels();

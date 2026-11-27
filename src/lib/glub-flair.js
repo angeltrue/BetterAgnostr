@@ -151,6 +151,22 @@ function auroraCurtainMarkup() {
 	return html;
 }
 
+// The old aurora star field was one pseudo-element pinned near the top of the
+// layer. Once a flair covers a whole run of messages that put every star on the
+// first message. These are small fixed-size fields spread down the full layer.
+function auroraStarMarkup() {
+	let html = "";
+	for (let i = 0; i < 8; i++) {
+		const top = (4 + i * 12.1 + rnd(-2.5, 2.5)).toFixed(1);
+		const left = Math.round(rnd(2, 58));
+		const field = particleField(5 + ((Math.random() * 4) | 0), 54, 7, STAR_TINTS);
+		const dur = rnd(4, 8).toFixed(2);
+		const delay = rnd(0, 7).toFixed(2);
+		html += `<span class="auroraStar" style="--as-top:${top}%;--as-left:${left}px;--as-field:${field};--as-dur:${dur}s;--as-delay:-${delay}s" aria-hidden="true"></span>`;
+	}
+	return html;
+}
+
 function starBandMarkup() {
 	let html = "";
 	for (let i = 0; i < 6; i++) {
@@ -181,7 +197,7 @@ export function flairFxInner(raw, options = {}) {
 	if (n === "bubbles") return bubbleMarkup(!!options.spread);
 	// the board is persistent: it is this row's circuitry, not a thing that happens to
 	// it, so it is drawn once and the surge only lights what is already there
-	if (n === "bitcoin") return circuitBoardMarkup(Number(options.runHeight) || 0);
+	if (n === "bitcoin") return circuitBoardMarkup(Number(options.runHeight) || 0, Number(options.hostHeight) || 0);
 	if (n === "sol") return solRayMarkup();
 	return "";
 }
@@ -204,7 +220,9 @@ export function flairFxInner(raw, options = {}) {
 const SCANLINE_FLAIRS = new Set(["neon", "matrix", "sonar", "glitch"]);
 
 export function flairOverlayInner(raw) {
-	return SCANLINE_FLAIRS.has(flairName(raw)) ? `<span class="flairScan" aria-hidden="true"></span>` : "";
+	const n = flairName(raw);
+	if (n === "aurora") return auroraStarMarkup();
+	return SCANLINE_FLAIRS.has(n) ? `<span class="flairScan" aria-hidden="true"></span>` : "";
 }
 
 // cool white-blues, so a field reads as starlight rather than confetti
@@ -1031,7 +1049,7 @@ function cirBranch(x, y) {
 	return cirSeg(x, y, x, y2) + cirSeg(x, y2, x2, y2);
 }
 
-export function circuitBoardMarkup(runHeight = 0) {
+export function circuitBoardMarkup(runHeight = 0, hostHeight = 0) {
 	const fitting = runHeight > 0 ? Math.round((runHeight - CIR_LANE_TOP) / CIR_LANE_GAP) : 0;
 	const lanes = Math.max(CIR_LANE_MIN, Math.min(14, Math.max(CIR_LANE_MAX, fitting)));
 	let html = "";
@@ -1065,7 +1083,24 @@ export function circuitBoardMarkup(runHeight = 0) {
 			if (x > 45 && Math.random() < 0.2) break;
 		}
 	}
-	return html + cirCoinMarkup();
+	const coins = [];
+	if (runHeight > 0 && hostHeight > 0) {
+		const size = hostHeight * 0.84;
+		const step = Math.max(hostHeight * 1.6, 90);
+		const first = hostHeight * 0.5;
+		const last = Math.max(first, runHeight - size * 0.5 - 4);
+		let y = first;
+		while (y <= last + 0.5 && coins.length < 4) {
+			coins.push(Math.round(y));
+			y += step;
+		}
+		if (coins.length && coins.length < 4 && coins[coins.length - 1] < last - size * 0.35) {
+			coins.push(Math.round(last));
+		}
+	} else {
+		coins.push(null);
+	}
+	return html + coins.map((y) => cirCoinMarkup(y)).join("");
 }
 
 // --- the coin --------------------------------------------------------------------
@@ -1179,11 +1214,11 @@ function cirCoinPath() {
 	].join(" ");
 }
 
-function cirCoinMarkup() {
+function cirCoinMarkup(y = null) {
 	// --t just past 1: the coin is the last thing the pulse reaches, and it sits a
 	// little beyond where the traces stop
 	return (
-		`<span class="cirCoinWrap" style="--t:1.02" aria-hidden="true">` +
+		`<span class="cirCoinWrap" style="--t:1.02${y == null ? "" : `;--coin-y:${y}px`}" aria-hidden="true">` +
 		`<svg class="cirCoin" viewBox="0 0 100 100"><path fill-rule="evenodd" d="${cirCoinPath()}"/></svg>` +
 		`</span>`
 	);
@@ -1502,8 +1537,8 @@ export function flairVars(raw) {
 	// between them is the entire effect. The ratio is held well away from 1.
 	if (n === "aurora") {
 		return {
-			// The sky is one box-shadow field; the curtains are separate gel sheets.
-			"--aur-stars": particleField(20, 58, 26, STAR_TINTS),
+			// The star fields live in the overlay markup so they can spread over a run;
+			// the curtains are separate gel sheets in the FX layer.
 			"--aur-curtain-dur": `${rnd(12, 24).toFixed(2)}s`,
 			"--aur-curtain-delay": `-${rnd(0, 22).toFixed(2)}s`,
 			"--aur-sway-dur": `${rnd(9, 17).toFixed(2)}s`,

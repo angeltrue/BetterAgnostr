@@ -1178,16 +1178,18 @@ html.retro .flairScan {
 	text-decoration-color: #c8ff5a;
 }
 
-.flair-aurora::before {
-	left: var(--aur-star-x, 18px);
-	top: var(--aur-star-y, 22%);
+/* Star fields are overlay elements so they can be spread down a whole run. */
+.flair-aurora .auroraStar {
+	position: absolute;
+	left: var(--as-left, 18px);
+	top: var(--as-top, 22%);
 	width: 2px;
 	height: 2px;
 	border-radius: 50%;
 	background: #ffffff;
-	box-shadow: var(--aur-stars, 60px -14px #ffffff, 150px 8px #cfe6ff, 260px -7px #dbe9ff);
+	box-shadow: var(--as-field, 60px -14px #ffffff, 150px 8px #cfe6ff, 260px -7px #dbe9ff);
 	opacity: 0.55;
-	animation: flairAuroraStars var(--aur-star-dur, 6s) ease-in-out var(--aur-star-delay, 0s) infinite alternate;
+	animation: flairAuroraStars var(--as-dur, 6s) ease-in-out var(--as-delay, 0s) infinite alternate;
 }
 
 /* The sky's ambient wash. Kept very soft and mostly above the text so the bright
@@ -2738,6 +2740,6 @@ html.retro .flairScan {
 /* The board's coin is a stamp on the first message, not a disc stretched to the
    height of the whole run. */
 .ag-msg-row.ba-flair-host.flair-bitcoin .cirCoinWrap {
-  top: calc(var(--ba-flair-host-height, 40px) * 0.5);
+  top: var(--coin-y, calc(var(--ba-flair-host-height, 40px) * 0.5));
   height: calc(var(--ba-flair-host-height, 40px) * 0.84);
 }
