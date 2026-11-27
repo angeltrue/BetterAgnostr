@@ -2,6 +2,13 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.8 — crash hotfix
+
+- Replaced the rain FX clip with a bounded per-row clip instead of a 200vh paint area. The oversized clip could create extremely large compositor surfaces on busy chats and crash the browser.
+- Added a re-entrancy guard and self-mutation filtering to the People-list badge observer so it cannot repeatedly trigger itself.
+- Kept the 1.3.7 flair behavior unchanged while removing the crash paths.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.7 — flair overlap and visibility fixes
 
 - Rain in a same-flair run now continues through the next message instead of resetting at each boundary.

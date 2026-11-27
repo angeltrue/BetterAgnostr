@@ -2015,8 +2015,8 @@ html.retro .flairScan {
 	container-type: size;
 	/* Keep the invisible spawn run above the row from showing outside it, while
 	   still allowing drops and splashes to continue below the message. */
-	-webkit-clip-path: inset(0 0 -200vh 0);
-	clip-path: inset(0 0 -200vh 0);
+	-webkit-clip-path: inset(0 0 calc(-1 * var(--rain-drop-extra, 0px) - 28px) 0);
+	clip-path: inset(0 0 calc(-1 * var(--rain-drop-extra, 0px) - 28px) 0);
 }
 
 .flair-rain .drop {
