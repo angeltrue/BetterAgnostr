@@ -20,10 +20,12 @@ async function writeCache(value) {
 }
 
 async function fetchBuild() {
+  const signal = typeof globalThis.AbortSignal?.timeout === "function" ? globalThis.AbortSignal.timeout(8000) : undefined;
   const res = await fetch("https://glub.chat/", {
     cache: "no-store",
     credentials: "omit",
     redirect: "follow",
+    signal,
     headers: { Accept: "text/html,application/xhtml+xml" },
   });
   if (!res.ok) throw new Error(`glub.chat returned HTTP ${res.status}`);
@@ -39,18 +41,36 @@ async function fetchBuild() {
   return build;
 }
 
-async function extensionEnabled() {
+async function extensionSettings() {
   try {
-    const obj = await browser.storage.local.get(SETTINGS_KEY);
-    return obj?.[SETTINGS_KEY]?.enabled !== false;
+    const obj = await api.storage.local.get(SETTINGS_KEY);
+    return obj?.[SETTINGS_KEY] || {};
   } catch {
-    return true;
+    return {};
   }
 }
 
+async function extensionEnabled() {
+  try {
+    const obj = await api.storage.local.get(SETTINGS_KEY);
+    return obj?.[SETTINGS_KEY]?.enabled !== false;
+  } catch {
+    return false;
+  }
+}
+
+let buildInFlight = null;
+
 async function getGlubBuild({ force = false } = {}) {
-  if (!(await extensionEnabled())) return { build: "", fetchedAt: 0, disabled: true };
+  if (buildInFlight) return buildInFlight;
+  buildInFlight = (async () => {
+    if (!(await extensionEnabled())) return { build: "", fetchedAt: 0, disabled: true };
   const cached = await readCache();
+  if (!force && (await extensionSettings()).glub?.autoSync === false) {
+    return cached
+      ? { build: cached.build, fetchedAt: cached.fetchedAt, cached: true }
+      : { build: "", fetchedAt: 0, disabled: true };
+  }
   const age = cached ? Date.now() - Number(cached.fetchedAt || 0) : Infinity;
   if (!force && cached && age < CACHE_MS) {
     return { build: cached.build, fetchedAt: cached.fetchedAt, cached: true };
@@ -73,10 +93,17 @@ async function getGlubBuild({ force = false } = {}) {
     }
     return { build: "", fetchedAt: 0, error: message };
   }
+  })();
+  try {
+    return await buildInFlight;
+  } finally {
+    buildInFlight = null;
+  }
 }
 
-api.runtime.onMessage.addListener((message) => {
+api.runtime.onMessage.addListener((message, sender) => {
   if (!message || typeof message !== "object") return undefined;
+  if (sender?.id && sender.id !== api.runtime.id) return undefined;
   if (message.type === "getGlubBuild") {
     return getGlubBuild({ force: !!message.force }).catch((err) => ({
       build: "",
@@ -99,11 +126,14 @@ api.runtime.onInstalled.addListener(() => {
 
 api.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "betterAgnostr.glubBuild") {
-    getGlubBuild({ force: true }).catch(() => {});
+    getGlubBuild({ force: false }).catch(() => {});
   }
 });
 
 // Also refresh on browser startup if an alarm was missed.
 api.runtime.onStartup.addListener(() => {
+  try {
+    api.alarms.create("betterAgnostr.glubBuild", { periodInMinutes: 10 });
+  } catch {}
   getGlubBuild({ force: false }).catch(() => {});
 });

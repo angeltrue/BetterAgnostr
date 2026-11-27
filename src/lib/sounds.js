@@ -91,11 +91,22 @@ function tone(ac, { freq, start = 0, duration = 0.12, peak = 0.08, master = 0.6,
   osc.stop(t + duration + 0.03);
 }
 
+const noiseBuffers = new WeakMap();
+
 function noise(ac, { start = 0, duration = 0.035, peak = 0.04, master = 0.6, freq = 1800, q = 1.2 }) {
   const length = Math.max(1, Math.floor(ac.sampleRate * duration));
-  const buffer = ac.createBuffer(1, length, ac.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  let cache = noiseBuffers.get(ac);
+  if (!cache) {
+    cache = new Map();
+    noiseBuffers.set(ac, cache);
+  }
+  let buffer = cache.get(length);
+  if (!buffer) {
+    buffer = ac.createBuffer(1, length, ac.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+    cache.set(length, buffer);
+  }
   const source = ac.createBufferSource();
   source.buffer = buffer;
   const filter = ac.createBiquadFilter();

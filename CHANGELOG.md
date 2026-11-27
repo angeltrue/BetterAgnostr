@@ -2,6 +2,23 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.0 — signer removal and robustness pass
+
+- Removed Better Agnostr's internal signer implementation: no React-fiber discovery, identity-manager patching, local-key lookup, or re-signing. A NIP-07 provider is the only pre-sign rewrite path.
+- Outgoing client tags, templates, tracking removal, tag stripping, and review-before-sign now run only when that NIP-07 provider is present; native-signer events are left untouched instead of being re-signed locally.
+- Made the page bridge reject cross-window/forged envelopes, require the session token on every message, and stopped exposing the token or diagnostics through `window.__betterAgnostr`.
+- Fixed rich-text double escaping, stopped `&` colour codes from eating URL query strings, and capped incoming rich text.
+- Fixed the 10 Hz empty obfuscation scan and the rich-text observer fight; reduced rich observers on removed rows and made reduced-motion obfuscated text readable.
+- Enforced flair limits and aliases, repaired flair/line style loss without re-randomizing every pass, and kept rich snapshots from overwriting newer content.
+- Hardened settings normalization against malformed storage, made multi-tab settings changes apply without reload, and only advance the origin backup after a successful save.
+- Made native sound suppression ref-counted across tabs and restore only the `soundEnabled` boolean instead of the whole notification object.
+- Fixed review-modal focus escaping and stale custom actions; closed modals now use `hidden`/`inert`, trap focus, restore focus, and clear stale targets. Review tags are removed by index and the timer now matches the page timeout.
+- Expanded call blocking to all call-signal kinds, kept blocked signals out of the event store, and honoured the hide-UI toggle.
+- Fixed voice-memo hiding in encrypted DMs, scoped composer actions to the active dock, repaired toolbar rebuilding, and improved emoji-picker accessibility.
+- Expanded the Chat label adapter to the Bitchat drawer/quickbar/globe, added target retries for plaques and call controls, and fixed the Chat document title.
+- Added a real test suite for parser escaping, URL handling, templates, tracking removal, settings normalization, and flair limits; CI now builds both browsers from source and verifies versions.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.2.2 — action menu and performance
 
 - Restored the message action toolbar to its previous fixed top-right position; Agnostr's new flex-flow placement no longer applies.
@@ -177,7 +194,7 @@ All notable changes to Better Agnostr are documented here.
 - Fixed message hover action menus getting stuck by clearing stale `actions-open`/`picker-open` state and focus.
 - Cleared hover state after the event viewer, Hug, Slap, and custom actions.
 
-## 1.1.2 — Privacy defaults, context-menu stability, and Chromium port
+## 1.1.2 — Privacy defaults and context-menu stability
 
 - Moved voice-memo removal into **Settings → Privacy & Trust** and enabled it by default.
 - Enabled **Omit teleport tag** by default, including for existing installations on the previous schema.
@@ -185,11 +202,6 @@ All notable changes to Better Agnostr are documented here.
 - Paused heavy page enhancements while a native context menu is open.
 - Limited message actions to actual message context menus.
 - Throttled the Bitchat-to-Chat text rewrite and narrowed its attribute scan.
-- Added a Chromium Manifest V3 build target with a service-worker background.
-- Added Chrome 148+ namespace and runtime-message compatibility.
-- Added `chrome-extension:` support for bundled font URLs.
-- Packaged a `better-agnostr-1.1.2-chromium.zip` pre-release.
-- Kept the Firefox build on `main`.
 
 ## 1.1.1 — Teleport omission, client control, matcha theme
 

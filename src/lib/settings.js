@@ -1,4 +1,5 @@
-import { FLAIR_NAMES, FMT_MAX, kindGroup } from "./glub.js";
+import { FMT_MAX, kindGroup } from "./glub.js";
+import { flairName } from "./glub-flair.js";
 import { GLUB_THEMES } from "./themes.js";
 import { CLICK_SOUNDS, MESSAGE_SOUNDS } from "./sounds.js";
 
@@ -116,6 +117,10 @@ function isObject(v) {
   return v && typeof v === "object" && !Array.isArray(v);
 }
 
+function section(value, fallback) {
+  return isObject(value) ? value : clone(fallback);
+}
+
 export function mergeSettings(base, patch) {
   if (!isObject(base)) return clone(patch);
   const out = clone(base);
@@ -128,10 +133,21 @@ export function mergeSettings(base, patch) {
 }
 
 export function normalizeSettings(raw) {
-  const legacyClient = !raw || typeof raw.schema !== "number" || raw.schema < 2;
-  const legacyToolbar = !raw || typeof raw.schema !== "number" || raw.schema < 3;
-  const legacyPrivacy = !raw || typeof raw.schema !== "number" || raw.schema < 4;
-  const s = mergeSettings(DEFAULT_SETTINGS, raw || {});
+  const source = isObject(raw) ? raw : {};
+  const legacyClient = typeof source.schema !== "number" || source.schema < 2;
+  const legacyToolbar = typeof source.schema !== "number" || source.schema < 3;
+  const legacyPrivacy = typeof source.schema !== "number" || source.schema < 4;
+  const s = mergeSettings(DEFAULT_SETTINGS, source);
+
+  // Storage is user-writable and can be left behind by older versions. Never let
+  // a primitive or null section reach the field normalizers below.
+  for (const key of ["studio", "client", "privacy", "theme", "appearance", "sounds", "font", "actions", "glub", "inspector", "ui"]) {
+    s[key] = section(s[key], DEFAULT_SETTINGS[key]);
+  }
+  s.client.policies = section(s.client.policies, DEFAULT_SETTINGS.client.policies);
+  s.privacy.calls = section(s.privacy.calls, DEFAULT_SETTINGS.privacy.calls);
+  s.sounds.events = section(s.sounds.events, DEFAULT_SETTINGS.sounds.events);
+
   if (legacyClient && s.client.name === "glub.chat") s.client.name = "BetterAgnostr";
   if (legacyToolbar) s.studio.showComposerToolbar = false;
   if (legacyPrivacy) s.privacy.omitTeleport = true;
@@ -147,9 +163,7 @@ export function normalizeSettings(raw) {
   s.studio.reduceMotion = s.studio.reduceMotion === true;
   s.studio.rainbowStyle = s.studio.rainbowStyle === "bright" ? "bright" : "glub";
   s.studio.template = String(s.studio.template || "").replace(/[\r\n\t]+/g, " ").slice(0, FMT_MAX);
-  if (typeof s.studio.flair !== "string" || (s.studio.flair && !FLAIR_NAMES.has(s.studio.flair))) {
-    s.studio.flair = "";
-  }
+  s.studio.flair = flairName(s.studio.flair);
 
   // client
   s.client.name = String(s.client.name || "").trim().slice(0, 64);
@@ -178,8 +192,9 @@ export function normalizeSettings(raw) {
   };
 
   // glub
-  s.glub.build = String(s.glub.build || "").trim().slice(0, 32);
-  s.glub.manualBuild = String(s.glub.manualBuild || "").trim().slice(0, 32);
+  s.glub.build = String(s.glub.build || "").trim().slice(0, 64);
+  s.glub.manualBuild = String(s.glub.manualBuild || "").trim().slice(0, 64);
+  if (s.glub.manualBuild && !/^[a-zA-Z0-9._-]{3,64}$/.test(s.glub.manualBuild)) s.glub.manualBuild = "";
   s.glub.buildFetchedAt = Number.isFinite(s.glub.buildFetchedAt) ? s.glub.buildFetchedAt : 0;
   s.glub.autoSync = s.glub.autoSync !== false;
 
@@ -223,6 +238,7 @@ export function normalizeSettings(raw) {
   s.ui.firstRun = s.ui.firstRun === true;
   s.ui.panelOpen = s.ui.panelOpen === true;
   delete s.ui.showVoiceMemo;
+  if (!["studio", "relay", "help"].includes(s.ui.activeTab)) s.ui.activeTab = "studio";
   if (!["line", "client"].includes(s.ui.betterTab)) s.ui.betterTab = "line";
 
   return s;

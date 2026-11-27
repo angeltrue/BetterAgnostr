@@ -4,6 +4,8 @@
   inset: 0;
   z-index: 2147483000;
   pointer-events: none;
+  direction: inherit;
+  color-scheme: inherit;
   font-family: var(--font-sans, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   font-size: 13px;
   line-height: 1.45;
@@ -896,6 +898,7 @@ a {
 }
 
 /* --- modal ---------------------------------------------------------------- */
+.ba-modal-wrap[hidden] { display: none !important; }
 .ba-modal-wrap {
   position: fixed;
   inset: 0;
@@ -919,6 +922,7 @@ a {
   top: 50%;
   width: min(900px, calc(100vw - 28px));
   max-height: min(82vh, 900px);
+  max-height: min(82dvh, 900px);
   transform: translate(-50%, -48%) scale(0.98);
   display: flex;
   flex-direction: column;
@@ -1008,6 +1012,7 @@ a {
   word-break: break-word;
   color: var(--ba-text-2);
   max-height: 56vh;
+  max-height: 56dvh;
   overflow: auto;
 }
 .ba-json .j-key { color: #93c5fd; }
@@ -1138,12 +1143,35 @@ a {
   font-weight: 700;
   color: var(--ba-text);
 }
+.ba-review-content {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--ba-mono);
+  font-size: 10px;
+  max-height: 220px;
+  overflow: auto;
+}
 .ba-toast-detail {
   font-size: 10px;
   color: var(--ba-text-2);
   margin-top: 1px;
   line-height: 1.4;
 }
+@media (max-width: 867px) {
+  .ba-toasts { bottom: calc(74px + env(safe-area-inset-bottom, 0px)); }
+}
+.ba-toast-close {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--ba-muted);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  padding: 0 2px;
+}
+.ba-toast-close:hover { color: var(--ba-text); }
 @keyframes ba-toast-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1465,6 +1493,7 @@ a {
   font-size: 11px;
   line-height: 1.6;
   max-height: 58vh;
+  max-height: 58dvh;
 }
 [data-modal="action"] .ba-card {
   border-color: color-mix(in srgb, currentColor 12%, transparent);

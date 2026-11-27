@@ -18,7 +18,7 @@ async function activeTab() {
 
 async function refresh() {
   const tab = await activeTab();
-  const isAgnostr = /^https:\/\/([a-z0-9-]+\.)?agnostr\.com\//i.test(tab?.url || "");
+  const isAgnostr = /^https:\/\/agnostr\.com\//i.test(tab?.url || "");
   let enabled = true;
   try {
     const stored = await api.storage.local.get(STORAGE_KEY);
@@ -30,18 +30,14 @@ async function refresh() {
   document.getElementById("subtitle").textContent = !isAgnostr
     ? "open agnostr.com to use the in-page panel"
     : !enabled
-      ? "paused for this tab"
+      ? "paused globally"
       : "connected to this tab";
 
   if (!isAgnostr || !tab?.id || !enabled) return;
   try {
     const res = await api.tabs.sendMessage(tab.id, { type: "getPageState" });
     const status = res?.status || {};
-    document.getElementById("signer").textContent = status.signerHooked
-      ? status.signMode || "hooked"
-      : status.nip07Patched
-        ? "nip-07"
-        : "waiting";
+    document.getElementById("rewriter").textContent = status.nip07Patched ? "nip-07" : "waiting";
     document.getElementById("build").textContent = res?.build ? res.build.slice(0, 10) : "not synced";
     document.getElementById("events").textContent = String(status.eventCount ?? "—");
   } catch {
@@ -64,6 +60,10 @@ document.getElementById("enabled").addEventListener("change", async (event) => {
     const stored = await api.storage.local.get(STORAGE_KEY);
     const settings = stored?.[STORAGE_KEY] || {};
     await api.storage.local.set({ [STORAGE_KEY]: { ...settings, enabled } });
+    const tabs = await api.tabs.query({ url: "https://agnostr.com/*" });
+    for (const tab of tabs || []) {
+      if (tab?.id) Promise.resolve(api.tabs.reload(tab.id)).catch(() => {});
+    }
   } catch {}
   window.close();
 });

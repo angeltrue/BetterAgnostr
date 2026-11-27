@@ -13,31 +13,83 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out release branch
+      - name: Check out Firefox source
         uses: actions/checkout@v4
 
-      - name: Check out Chromium build
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install, test, lint, and build Firefox
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          npm run lint
+          node build.mjs
+
+      - name: Check out Chromium source
         uses: actions/checkout@v4
         with:
           ref: main-chromium
           path: chromium
 
+      - name: Install, test, lint, and build Chromium
+        working-directory: chromium
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          npm run lint
+          node build.mjs
+
       - name: Determine version
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Verify release assets
+      - name: Verify source and artifact versions
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          test -f "release/better-agnostr-${VERSION}.xpi"
-          test -f "release/better-agnostr-${VERSION}.zip"
+          set -euo pipefail
+          node -e '
+            const fs = require("fs");
+            const version = process.env.VERSION;
+            for (const base of [".", "chromium"]) {
+              const pkg = JSON.parse(fs.readFileSync(`${base}/package.json`, "utf8"));
+              const manifest = JSON.parse(fs.readFileSync(`${base}/src/manifest.json`, "utf8"));
+              const distManifest = JSON.parse(fs.readFileSync(`${base}/dist/manifest.json`, "utf8"));
+              if (pkg.version !== version) throw new Error(`${base} package.json is ${pkg.version}, tag is ${version}`);
+              if (manifest.version !== version) throw new Error(`${base} manifest.json is ${manifest.version}, tag is ${version}`);
+              if (distManifest.version !== version) throw new Error(`${base} dist manifest is ${distManifest.version}, tag is ${version}`);
+            }
+            const chrome = JSON.parse(fs.readFileSync("chromium/dist/manifest.json", "utf8"));
+            if (!chrome.key || chrome.key.length < 300) throw new Error("Chromium manifest key is missing or truncated");
+          '
+          test -f "better-agnostr-${VERSION}.xpi"
+          test -f "better-agnostr-${VERSION}.zip"
           test -f "chromium/release/better-agnostr-${VERSION}-chromium.zip"
+          ! grep -q "signEventWithMaterial" dist/page.js
+
+      - name: Generate checksums
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          sha256sum \
+            "better-agnostr-${VERSION}.xpi" \
+            "better-agnostr-${VERSION}.zip" \
+            "chromium/release/better-agnostr-${VERSION}-chromium.zip" \
+            > "release/SHA256SUMS-${VERSION}.txt"
 
       - name: Locate release notes
         id: notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          TAG="${{ steps.version.outputs.version }}"
-          FILE="release/RELEASE_NOTES-${TAG}.md"
+          FILE="release/RELEASE_NOTES-${VERSION}.md"
           if [ -f "$FILE" ]; then
             echo "file=$FILE" >> "$GITHUB_OUTPUT"
           else
@@ -55,7 +107,8 @@ jobs:
           name: Better Agnostr ${{ github.ref_name }}
           body_path: ${{ steps.notes.outputs.file }}
           files: |
-            release/better-agnostr-${{ steps.version.outputs.version }}.xpi
-            release/better-agnostr-${{ steps.version.outputs.version }}.zip
+            better-agnostr-${{ steps.version.outputs.version }}.xpi
+            better-agnostr-${{ steps.version.outputs.version }}.zip
             chromium/release/better-agnostr-${{ steps.version.outputs.version }}-chromium.zip
+            release/SHA256SUMS-${{ steps.version.outputs.version }}.txt
           fail_on_unmatched_files: true
