@@ -152,17 +152,18 @@ function auroraCurtainMarkup() {
 }
 
 // The old aurora star field was one pseudo-element pinned near the top of the
-// layer. Once a flair covers a whole run of messages that put every star on the
-// first message. These are small fixed-size fields spread down the full layer.
+// layer, and its box-shadow field only reached part way across the row. Three
+// full-layer repeating fields cover the whole width and height; their different
+// offsets, periods and opacities keep the pattern from reading as a grid.
 function auroraStarMarkup() {
 	let html = "";
-	for (let i = 0; i < 8; i++) {
-		const top = (4 + i * 12.1 + rnd(-2.5, 2.5)).toFixed(1);
-		const left = Math.round(rnd(2, 58));
-		const field = particleField(5 + ((Math.random() * 4) | 0), 54, 7, STAR_TINTS);
-		const dur = rnd(4, 8).toFixed(2);
+	for (let i = 0; i < 3; i++) {
+		const x = Math.round(rnd(-360, 360));
+		const y = Math.round(rnd(-240, 240));
+		const dur = rnd(4.5, 8.5).toFixed(2);
 		const delay = rnd(0, 7).toFixed(2);
-		html += `<span class="auroraStar" style="--as-top:${top}%;--as-left:${left}px;--as-field:${field};--as-dur:${dur}s;--as-delay:-${delay}s" aria-hidden="true"></span>`;
+		const op = rnd(0.32, 0.62).toFixed(2);
+		html += `<span class="auroraStarField" style="--as-pos-x:${x}px;--as-pos-y:${y}px;--as-dur:${dur}s;--as-delay:-${delay}s;--as-op:${op}" aria-hidden="true"></span>`;
 	}
 	return html;
 }
@@ -291,6 +292,18 @@ export function lightningStrikeMarkup(w, h) {
 // embers glow warm; ash is what's left of them, so field B mixes dull greys in
 const EMBER_TINTS = ["#ffb057", "#ff7a18", "#ffd08a", "#ff9d3d", "#ffc46b", "#ff6a00"];
 const ASH_TINTS = ["#a89a8f", "#8a7f77", "#d8c2ad", "#e08a3a", "#b58c70", "#ffb066", "#f0c49a"];
+
+// Ash uses wider spacing and more vertical scatter than the other box-shadow
+// fields, so a shower does not read as an evenly printed row of dots.
+function ashField(count = 10) {
+	const out = [];
+	let x = 0;
+	for (let i = 0; i < count; i++) {
+		x += rnd(32, 116);
+		out.push(`${Math.round(x)}px ${Math.round(rnd(-9, 9))}px ${pick(ASH_TINTS)}`);
+	}
+	return out.join(", ");
+}
 
 // a drifting particle's lateral path, as offsets the keyframes ease through. Signs
 // alternate around a constant `lean` (the line's prevailing draft) so the particle
@@ -1337,11 +1350,11 @@ export function flairVars(raw) {
 			// the bright embers are individual spans (see fireEmberMarkup); this field
 			// is only the dim ash haze behind them, where uniform timing doesn't read
 			// - it's slow, faint, and snuffs out partway up (see flairAshRise).
-			"--ash-field": particleField(8, 54, 4, ASH_TINTS),
-			"--ash-left": `${Math.round(rnd(8, 40))}px`,
+			"--ash-field": ashField(10),
+			"--ash-left": `${Math.round(rnd(6, 34))}px`,
 			"--ash-dur": `${rnd(4.2, 7.5).toFixed(2)}s`,
 			"--ash-delay": `-${rnd(0, 7).toFixed(2)}s`,
-			...wobble("--ash-x", rnd(6, 13), lean),
+			...wobble("--ash-x", rnd(8, 18), lean),
 			"--fire-text-dur": `${rnd(3.4, 6.2).toFixed(2)}s`,
 			"--fire-text-delay": `-${rnd(0, 5).toFixed(2)}s`,
 		};
