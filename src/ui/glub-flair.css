@@ -385,7 +385,7 @@ html[data-ba-rainbow="bright"],
 
 .flair-fire .ember {
 	position: absolute;
-	bottom: -2px;
+	bottom: var(--e-y, -2px);
 	left: var(--e-x, 20%);
 	width: var(--e-size, 2px);
 	height: var(--e-size, 2px);
@@ -1744,7 +1744,7 @@ html.retro .flairScan {
 
 .flair-bubbles .bubble {
 	position: absolute;
-	bottom: -3px;
+	bottom: var(--b-y, -3px);
 	left: var(--b-x, 30%);
 	width: var(--b-size, 7px);
 	height: var(--b-size, 7px);
@@ -2324,7 +2324,7 @@ html.retro .flairScan {
 	z-index: -1;
 }
 
-.flair-stars > .ba-shooting-star {
+.flair-stars > .flairFx > .ba-shooting-star {
 	position: absolute;
 	left: 0;
 	top: 0;
@@ -2592,7 +2592,7 @@ html.retro .flairScan {
   position: absolute !important;
   top: calc(-1 * var(--ba-flair-bleed-top, 0px)) !important;
   right: 0 !important;
-  bottom: calc(-1 * var(--ba-flair-bleed-bottom, 0px)) !important;
+  bottom: calc(-1 * (var(--ba-flair-run-extra, 0px) + var(--ba-flair-bleed-bottom, 0px))) !important;
   left: 0 !important;
   display: block;
   overflow: hidden !important;
@@ -2707,4 +2707,37 @@ html.retro .flairScan {
   --bg: var(--bg-canvas, #000000);
   --fg: var(--text-primary, #ffffff);
   --scanline-color: color-mix(in srgb, var(--text-primary, #ffffff) 7%, transparent);
+}
+
+/* One flair surface per contiguous run. The top row hosts a single layer that
+   extends to the bottom of the run; member rows stay transparent so the host's
+   surface shows through. The row itself must not paint a second copy. */
+.ag-msg-row.flair::before,
+.ag-msg-row.flair::after {
+  content: none !important;
+}
+
+.ag-msg-row.ba-flair-host {
+  overflow: visible !important;
+}
+
+.ag-msg-row.ba-flair-member {
+  background-color: transparent;
+}
+
+.ag-msg-row.ba-flair-host > .flairFx {
+  top: calc(-1 * var(--ba-flair-bleed-top, 0px)) !important;
+  right: 0 !important;
+  bottom: calc(-1 * (var(--ba-flair-run-extra, 0px) + var(--ba-flair-bleed-bottom, 0px))) !important;
+  left: 0 !important;
+  height: auto !important;
+  overflow: hidden !important;
+  border-radius: inherit;
+}
+
+/* The board's coin is a stamp on the first message, not a disc stretched to the
+   height of the whole run. */
+.ag-msg-row.ba-flair-host.flair-bitcoin .cirCoinWrap {
+  top: calc(var(--ba-flair-host-height, 40px) * 0.5);
+  height: calc(var(--ba-flair-host-height, 40px) * 0.84);
 }

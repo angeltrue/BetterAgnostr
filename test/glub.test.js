@@ -10,7 +10,7 @@ import {
   stripTrackingParams,
   tokenize,
 } from "../src/lib/glub.js";
-import { flairLimit, flairName } from "../src/lib/glub-flair.js";
+import { flairFxInner, flairLimit, flairName } from "../src/lib/glub-flair.js";
 
 test("literal ampersands are escaped exactly once", () => {
   assert.equal(renderFormatHtml("A & B"), "A &amp; B");
@@ -58,4 +58,16 @@ test("flair aliases and limits stay available to the UI", () => {
   assert.equal(flairLimit("sol"), 0);
   assert.equal(isValidFlair("plasma"), true);
   assert.equal(isValidFlair("nonsense"), false);
+});
+
+
+test("run-spread particles keep their fixed size and gain vertical positions", () => {
+  const fire = flairFxInner("fire", { spread: true });
+  const bubbles = flairFxInner("bubbles", { spread: true });
+  assert.match(fire, /--e-y:/);
+  assert.match(bubbles, /--b-y:/);
+  assert.match(fire, /--e-size:\dpx/);
+  assert.match(bubbles, /--b-size:\dpx/);
+  assert.doesNotMatch(flairFxInner("fire"), /--e-y:/);
+  assert.doesNotMatch(flairFxInner("bubbles"), /--b-y:/);
 });

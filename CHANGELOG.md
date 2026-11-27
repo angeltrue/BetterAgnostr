@@ -2,6 +2,18 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.4.1 — dynamic flair runs
+
+- Rebuilt flair rendering around one surface per contiguous same-flair run. The first message hosts a single background layer and FX layer; following messages become run members instead of each rendering their own flair.
+- The host layer now extends and retracts to the run's measured height, including the gaps between messages. Same-flair messages no longer meet at per-row masks, doubled pseudo-elements, or internal seams.
+- Suppressed the row-level pseudo backgrounds that duplicated the old layer. Row classes remain for text colours and text animations, so the visible surface is rendered once.
+- Run membership is recomputed when messages are added, removed, split, merged, or resized. A run promoted to a new host builds its surface immediately; a removed host hands the surface to the next message.
+- Particle sizes stay fixed. Fire embers and bubbles gain random vertical positions across a multi-message run without growing; stars, shooting stars, ash, fireflies, rain, plume and aurora keep their existing pixel sizes.
+- The bitcoin board now adds trace lanes for taller runs, while its coin stays sized to the first message. Neon draws one frame around the whole run.
+- Flair limits now count runs rather than messages, so a long same-flair run is not cut off after the limit.
+- Kept the 1.4.0 verification, observer, bridge, and scheduling optimizations.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.4.0 — performance release
 
 - Incoming relay events are now signature-verified only when they can trigger a notification (chat, mentions, DMs, calls). Everything else is verified on demand in the event viewer, removing Schnorr verification from the bulk relay hot path.
