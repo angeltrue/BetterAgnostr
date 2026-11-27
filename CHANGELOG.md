@@ -2,6 +2,18 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.4.2 — flair reliability hotfix
+
+- Fixed flairs and `&g` rainbow styling being skipped after switching tabs in Agnostr. Mutation batches now process every added row instead of stopping after the first relevant node.
+- Row observers now attach to every message-list root, including new panes as they mount, instead of only the first list. Reused rows that change their `id` are also repaired immediately.
+- Added a navigation-click hook for Agnostr's rail, mobile tabs, suite cards, server rail and conversation rows, plus a 3-second safety sweep, so recycled lists reapply flair and line styling without waiting for a later mutation.
+- Flairs and line styles are repaired in place. React stripping row, author or message classes no longer tears down the flair layer and FX layer, so clicking a message does not restart matrix columns or other animations.
+- Flair limits now count only hosts whose run surface is visible in the viewport. Hidden tabs no longer hold matrix, plume, aurora or bitcoin slots and block flairs in the active tab.
+- Aurora stars are now distributed overlay bands across the whole run instead of one top-anchored star field.
+- Bitcoin coins are distributed down the run at fixed size, up to four, instead of appearing only on the first message.
+- Kept the 1.4.1 one-surface-per-run architecture and the 1.4.0 performance work.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.4.1 — dynamic flair runs
 
 - Rebuilt flair rendering around one surface per contiguous same-flair run. The first message hosts a single background layer and FX layer; following messages become run members instead of each rendering their own flair.
