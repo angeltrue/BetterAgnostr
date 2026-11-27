@@ -369,7 +369,7 @@ html[data-ba-rainbow="bright"],
 
 .flair-fire::after {
 	left: var(--ash-left, 20px);
-	top: calc(100% - 8px);
+	top: calc(100% - 18px);
 	width: 3px;
 	height: 3px;
 	border-radius: 50%;
