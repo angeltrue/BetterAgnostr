@@ -248,6 +248,7 @@ const state = {
   betterClientsTimer: null,
   lastBitchatReplace: 0,
   bitchatTimer: null,
+  peopleBadgeBusy: false,
   lastCallMaintenance: 0,
   callMaintenanceTimer: null,
   settingsEpoch: 0,
@@ -3850,20 +3851,22 @@ function observePeopleBadges() {
     for (const record of records) {
       if (record.type === "characterData") {
         const parent = record.target.parentElement;
+        if (parent?.closest(".ba-client-badge")) continue;
         if (parent?.closest(".ag-users-row, .ag-users-name")) {
-          markBetterClients(true);
+          repairPeopleBadges();
           return;
         }
         continue;
       }
+      if (record.target instanceof Element && record.target.closest(".ba-client-badge")) continue;
       if (record.target instanceof Element && record.target.closest(".ag-users-row")) {
-        markBetterClients(true);
+        repairPeopleBadges();
         return;
       }
       for (const node of record.addedNodes) {
         if (!(node instanceof Element)) continue;
-        if (node.matches(".ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name")) {
-          markBetterClients(true);
+        if (node.matches(".ba-client-badge, .ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name")) {
+          if (!node.matches(".ba-client-badge")) repairPeopleBadges();
           return;
         }
       }
@@ -4599,6 +4602,16 @@ function syncPeerClientPill(modal) {
     target.textContent = display.text;
     target.title = display.text;
     target.dataset.baClientPill = "1";
+  }
+}
+
+function repairPeopleBadges() {
+  if (state.peopleBadgeBusy) return;
+  state.peopleBadgeBusy = true;
+  try {
+    markBetterClients(true);
+  } finally {
+    state.peopleBadgeBusy = false;
   }
 }
 
