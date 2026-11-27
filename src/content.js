@@ -246,11 +246,11 @@ const state = {
   emojiCategory: "smileys",
   lastBetterClients: 0,
   betterClientsTimer: null,
-  lastBitchatReplace: 0,
-  bitchatTimer: null,
   peopleBadgeBusy: false,
   lastCallMaintenance: 0,
   callMaintenanceTimer: null,
+  lastFlairJoinAt: 0,
+  flairJoinTimer: null,
   settingsEpoch: 0,
   fontCssSignature: "",
   enhancePending: false,
@@ -3714,6 +3714,24 @@ const CHAT_LABEL_BLOCKED = [
   "style",
   "[contenteditable='true']",
 ].join(", ");
+const CHAT_LABEL_CONTEXT = [
+  ".ag-app-rail",
+  ".ag-mobile-tabbar",
+  ".ag-conv-header",
+  ".ag-header",
+  ".ag-bitchat-drawer",
+  ".ag-bitchat-quickbar",
+  ".ag-bitchat-globe-stage",
+  ".ag-suite-popover",
+  ".ag-suite-footer",
+  ".ag-settings-modal",
+  ".ag-peer-modal",
+  ".ag-sheet",
+  ".ag-quick-profile-popover",
+  ".ag-ctx-menu",
+  ".ag-toast-stack",
+  ".ag-room-switcher-popover",
+].join(", ");
 
 function chatLabel(value) {
   return String(value || "").replace(CHAT_LABEL_RE, "Chat");
@@ -3788,126 +3806,23 @@ function replaceChatLabelsIn(root) {
   }
 }
 
-// Replace the product name across UI labels and attributes, including new
-// Bitchat surfaces, while leaving message bodies, names, and inputs untouched.
-function replaceBitchatText() {
-  if (!state.enabledReady || state.settings.enabled === false || !document.body) return;
-  const now = performance.now();
-  if (now - state.lastBitchatReplace < 350) {
-    if (state.bitchatTimer === null) {
-      state.bitchatTimer = window.setTimeout(() => {
-        state.bitchatTimer = null;
-        replaceBitchatText();
-      }, 350 - (now - state.lastBitchatReplace));
-    }
-    return;
-  }
-  state.lastBitchatReplace = now;
-
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      if (!CHAT_LABEL_RE.test(node.nodeValue || "")) {
-        CHAT_LABEL_RE.lastIndex = 0;
-        return NodeFilter.FILTER_REJECT;
-      }
-      CHAT_LABEL_RE.lastIndex = 0;
-      const parent = node.parentElement;
-      if (!parent || parent.closest(CHAT_LABEL_BLOCKED)) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
-  const nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-  for (const node of nodes) node.nodeValue = chatLabel(node.nodeValue || "");
-
-  for (const el of document.querySelectorAll("[aria-label], [title], [placeholder], [alt]")) {
-    if (!(el instanceof HTMLElement) || el.closest(CHAT_LABEL_BLOCKED)) continue;
-    for (const attr of ["aria-label", "title", "placeholder", "alt"]) {
-      const value = el.getAttribute(attr);
-      if (value && CHAT_LABEL_RE.test(value)) {
-        CHAT_LABEL_RE.lastIndex = 0;
-        el.setAttribute(attr, chatLabel(value));
-      }
-      CHAT_LABEL_RE.lastIndex = 0;
-    }
-  }
+function replaceChatTitle() {
   if (/\bbitchat\b/i.test(document.title)) {
-    document.title = document.title.replace(CHAT_LABEL_RE, "Chat");
-    CHAT_LABEL_RE.lastIndex = 0;
+    document.title = document.title.replace(/\bBitchat\b/gi, "Chat");
   }
 }
 
-function scheduleBitchatReplace(delay = 80) {
-  if (state.bitchatTimer !== null) return;
-  state.bitchatTimer = window.setTimeout(() => {
-    state.bitchatTimer = null;
-    replaceBitchatText();
-  }, delay);
-}
-
-function observePeopleBadges() {
-  if (typeof MutationObserver !== "function" || !document.body) return;
-  const observer = new MutationObserver((records) => {
-    for (const record of records) {
-      if (record.type === "characterData") {
-        const parent = record.target.parentElement;
-        if (parent?.closest(".ba-client-badge")) continue;
-        if (parent?.closest(".ag-users-row, .ag-users-name")) {
-          repairPeopleBadges();
-          return;
-        }
-        continue;
-      }
-      if (record.target instanceof Element && record.target.closest(".ba-client-badge")) continue;
-      if (record.target instanceof Element && record.target.closest(".ag-users-row")) {
-        repairPeopleBadges();
-        return;
-      }
-      for (const node of record.addedNodes) {
-        if (!(node instanceof Element)) continue;
-        if (node.matches(".ba-client-badge, .ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name")) {
-          if (!node.matches(".ba-client-badge")) repairPeopleBadges();
-          return;
-        }
-      }
-    }
-  });
-  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-}
-
-function observeSettingsModal() {
-  if (typeof MutationObserver !== "function" || !document.body) return;
-  const observer = new MutationObserver((records) => {
-    const modal = document.querySelector(".ag-settings-modal");
-    if (!modal) return;
-    for (const record of records) {
-      if (record.type !== "childList") continue;
-      for (const node of record.addedNodes) {
-        if (!(node instanceof Element)) continue;
-        const insideModal = !!node.closest(".ag-settings-modal") || node.matches(".ag-settings-modal");
-        if (!insideModal) continue;
-        if (
-          node.matches(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section") ||
-          node.querySelector(".ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section")
-        ) {
-          syncSettingsIntegration();
-          return;
-        }
-      }
-    }
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
-}
 
 function observeChatLabels() {
   if (typeof MutationObserver !== "function" || !document.body) return;
   const observer = new MutationObserver((records) => {
     for (const record of records) {
       if (record.type === "characterData") {
+        const parent = record.target.parentElement;
+        if (!parent || !parent.closest(CHAT_LABEL_CONTEXT)) continue;
         if (CHAT_LABEL_RE.test(record.target.nodeValue || "")) {
           CHAT_LABEL_RE.lastIndex = 0;
           replaceChatLabelsIn(record.target);
-          scheduleBitchatReplace();
           return;
         }
         CHAT_LABEL_RE.lastIndex = 0;
@@ -3915,12 +3830,11 @@ function observeChatLabels() {
       }
       if (record.type === "attributes") {
         const el = record.target;
-        if (!(el instanceof Element)) continue;
+        if (!(el instanceof Element) || !el.closest(CHAT_LABEL_CONTEXT)) continue;
         const value = el.getAttribute(record.attributeName || "");
         if (value && CHAT_LABEL_RE.test(value)) {
           CHAT_LABEL_RE.lastIndex = 0;
           replaceChatLabelsIn(el);
-          scheduleBitchatReplace();
           return;
         }
         CHAT_LABEL_RE.lastIndex = 0;
@@ -3928,20 +3842,26 @@ function observeChatLabels() {
       }
       for (const node of record.addedNodes) {
         if (node.nodeType === Node.TEXT_NODE) {
+          const parent = node.parentElement;
+          if (!parent || !parent.closest(CHAT_LABEL_CONTEXT) || parent.closest(".ag-msg-row")) continue;
           if (CHAT_LABEL_RE.test(node.nodeValue || "")) {
             CHAT_LABEL_RE.lastIndex = 0;
             replaceChatLabelsIn(node);
-            scheduleBitchatReplace();
-            return;
+              return;
           }
           CHAT_LABEL_RE.lastIndex = 0;
           continue;
         }
         if (!(node instanceof Element)) continue;
+        if (node.closest(".ag-msg-row")) continue;
+        const inContext =
+          node.matches(CHAT_LABEL_CONTEXT) ||
+          !!node.closest(CHAT_LABEL_CONTEXT) ||
+          !!node.querySelector(CHAT_LABEL_CONTEXT);
+        if (!inContext) continue;
         if (CHAT_LABEL_RE.test(node.textContent || "") || CHAT_LABEL_RE.test(node.getAttribute("aria-label") || "") || CHAT_LABEL_RE.test(node.getAttribute("title") || "")) {
           CHAT_LABEL_RE.lastIndex = 0;
           replaceChatLabelsIn(node);
-          scheduleBitchatReplace();
           return;
         }
         CHAT_LABEL_RE.lastIndex = 0;
@@ -4003,7 +3923,6 @@ function enhanceAll() {
     markBetterClients();
     hideSelfTeleportBadges();
     removeTransientNativeToasts();
-    scheduleBitchatReplace();
   } finally {
     state.pageObserverStart?.();
   }
@@ -4330,6 +4249,19 @@ function repairRowNow(row) {
 }
 
 function updateFlairJoins() {
+  if (!state.enabledReady || state.settings.enabled === false) return;
+  const now = performance.now();
+  const elapsed = now - (state.lastFlairJoinAt || 0);
+  if (elapsed < 250) {
+    if (state.flairJoinTimer === null) {
+      state.flairJoinTimer = window.setTimeout(() => {
+        state.flairJoinTimer = null;
+        updateFlairJoins();
+      }, 250 - elapsed + 20);
+    }
+    return;
+  }
+  state.lastFlairJoinAt = now;
   const rectCache = new Map();
   const rectOf = (el) => {
     if (!(el instanceof HTMLElement)) return null;
@@ -4633,12 +4565,12 @@ function markBetterClients(force = false) {
   if (!state.enabledReady || state.settings.enabled === false) return;
   const now = Date.now();
   const elapsed = now - (state.lastBetterClients || 0);
-  if (!force && elapsed < 500) {
+  if (!force && elapsed < 1500) {
     if (state.betterClientsTimer === null) {
       state.betterClientsTimer = window.setTimeout(() => {
         state.betterClientsTimer = null;
         markBetterClients();
-      }, 500 - elapsed + 20);
+      }, 1500 - elapsed + 20);
     }
     return;
   }
@@ -6011,8 +5943,18 @@ function observePage() {
             relevant = true;
           }
         }
+        if (target instanceof Element && target.closest(".ag-users-row")) repairPeopleBadges();
         for (const node of [...record.addedNodes, ...record.removedNodes]) {
           if (!(node instanceof Element)) continue;
+          if (node.matches(".ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name")) {
+            repairPeopleBadges();
+          }
+          if (
+            node.matches(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section") ||
+            node.querySelector(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section")
+          ) {
+            syncSettingsIntegration();
+          }
           if (node.matches(relevantSelector) || node.querySelector(relevantSelector)) {
             relevant = true;
             if (
@@ -6159,7 +6101,8 @@ async function init() {
   document.documentElement.classList.add("ba-active");
   // Catch labels rendered while extension storage was loading, before the first
   // debounced enhance pass.
-  replaceBitchatText();
+  replaceChatLabelsIn(document.body);
+  replaceChatTitle();
   removeTransientNativeToasts();
   overrideNativeSounds();
   document.addEventListener("pointerdown", () => {
@@ -6225,12 +6168,12 @@ async function init() {
       state.enhancePending = false;
       scheduleEnhance(true);
     }
-    replaceBitchatText();
+    replaceChatTitle();
   });
   const titleEl = document.querySelector("title");
   if (titleEl && typeof MutationObserver === "function") {
     new MutationObserver(() => {
-      if (/\bbitchat\b/i.test(document.title)) replaceBitchatText();
+      replaceChatTitle();
     }).observe(titleEl, { childList: true, characterData: true, subtree: true });
   }
   window.addEventListener("resize", () => {
@@ -6269,8 +6212,6 @@ async function init() {
   ensureHost();
   observePage();
   observeChatLabels();
-  observeSettingsModal();
-  observePeopleBadges();
   applyShortcutVisibility();
   scheduleSettingsSync();
   hello();
