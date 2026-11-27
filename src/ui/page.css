@@ -112,24 +112,22 @@
   --ba-rich: 1;
 }
 
-/* Better Agnostr users get a small plaque next to their name. Client
-   identification borders are owned by Agnostr itself. */
-.ba-better-name::after {
+/* Better Agnostr users get a real plaque element next to their name. */
+.ba-client-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   height: 15px;
   padding: 0 4px;
   margin-left: 4px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border-default));
   border-radius: 4px;
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
+  background: var(--accent-soft);
+  color: var(--accent);
   font: 700 8.5px/1 var(--font-mono);
   letter-spacing: 0.04em;
   vertical-align: middle;
   text-decoration: none;
-  pointer-events: none;
   max-width: 14ch;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -140,14 +138,9 @@
   background-clip: border-box !important;
   -webkit-background-clip: border-box !important;
 }
-.ba-better-name::after {
-  content: "BA";
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-default));
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.ag-msg-head .ba-better-name::after { transform: translateY(-1px); }
-.ag-peer-modal-name.ba-better-name::after { margin-left: 6px; }
+.ag-msg-head .ba-client-badge { transform: translateY(-1px); }
+.ag-peer-modal-name + .ba-client-badge,
+.ag-peer-modal-name .ba-client-badge { margin-left: 6px; }
 
 html[data-ba-theme] .ag-set-theme-grid:not(.ba-glub-theme-grid) .ag-set-theme-check {
   display: none !important;
@@ -1462,4 +1455,23 @@ html.ba-active .ag-mtab-label {
 html.ba-active .ag-rail-app-tile,
 html.ba-active .ag-mtab-btn {
   min-height: 50px !important;
+}
+
+
+/* Static Chat label fallback for the two most visible product labels. The
+   content-script adapter still updates the real DOM text/aria; this prevents a
+   Bitchat flash before that happens. */
+.ag-rail-app-tile[aria-label="Bitchat"] .ag-rail-app-label,
+.ag-mtab-btn[aria-label="Bitchat"] .ag-mtab-label {
+  font-size: 0 !important;
+}
+.ag-rail-app-tile[aria-label="Bitchat"] .ag-rail-app-label::after,
+.ag-mtab-btn[aria-label="Bitchat"] .ag-mtab-label::after {
+  content: "Chat";
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.ag-mtab-btn[aria-label="Bitchat"] .ag-mtab-label::after {
+  font-size: 10px;
 }

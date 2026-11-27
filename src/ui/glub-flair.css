@@ -633,6 +633,30 @@ html.retro .flairScan {
 	border-radius: 6px;
 }
 
+.ag-msg-row[data-ba-flair-join-top] > .ba-flair-layer.flair-neon::before,
+.ag-msg-row[data-ba-flair-join-top] > .ba-flair-layer.flair-neon::after {
+	border-top-width: 0;
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+}
+
+.ag-msg-row[data-ba-flair-join-bottom] > .ba-flair-layer.flair-neon::before,
+.ag-msg-row[data-ba-flair-join-bottom] > .ba-flair-layer.flair-neon::after {
+	border-bottom-width: 0;
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
+.ag-msg-row[data-ba-flair-join-top] > .ba-flair-layer.flair-neon .flairScan {
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+}
+
+.ag-msg-row[data-ba-flair-join-bottom] > .ba-flair-layer.flair-neon .flairScan {
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
 @keyframes flairNeonHum {
 	0% {
 		opacity: 0.93;
@@ -1186,8 +1210,18 @@ html.retro .flairScan {
 	overflow: hidden;
 	mix-blend-mode: screen;
 	filter: blur(4.5px) saturate(1.3);
-	-webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.22) 28%, #000 62%, #000 82%, transparent 100%);
-	mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.22) 28%, #000 62%, #000 82%, transparent 100%);
+	--aurora-mask-top: transparent;
+	--aurora-mask-bottom: transparent;
+	-webkit-mask-image: linear-gradient(180deg, var(--aurora-mask-top) 0%, #000 18%, #000 82%, var(--aurora-mask-bottom) 100%);
+	mask-image: linear-gradient(180deg, var(--aurora-mask-top) 0%, #000 18%, #000 82%, var(--aurora-mask-bottom) 100%);
+}
+
+.ag-msg-row.flair-aurora[data-ba-flair-join-top] > .flairFx {
+	--aurora-mask-top: #000;
+}
+
+.ag-msg-row.flair-aurora[data-ba-flair-join-bottom] > .flairFx {
+	--aurora-mask-bottom: #000;
 }
 
 /* A curtain is three things in one element: a vertical fade (the green crown giving
@@ -1981,8 +2015,8 @@ html.retro .flairScan {
 	container-type: size;
 	/* Keep the invisible spawn run above the row from showing outside it, while
 	   still allowing drops and splashes to continue below the message. */
-	-webkit-clip-path: inset(0 0 -28px 0);
-	clip-path: inset(0 0 -28px 0);
+	-webkit-clip-path: inset(0 0 -200vh 0);
+	clip-path: inset(0 0 -200vh 0);
 }
 
 .flair-rain .drop {
@@ -2028,11 +2062,11 @@ html.retro .flairScan {
 		opacity: var(--d-op, 0.8);
 	}
 	82% {
-		translate: var(--d-lean, 3px) calc(100cqh - var(--d-len, 7px) - 2px);
+		translate: var(--d-lean, 3px) calc(100cqh - var(--d-len, 7px) - 2px + var(--rain-drop-extra, 0px));
 		opacity: var(--d-op, 0.8);
 	}
 	92%, 100% {
-		translate: var(--d-lean, 3px) calc(100cqh - var(--d-len, 7px) - 2px);
+		translate: var(--d-lean, 3px) calc(100cqh - var(--d-len, 7px) - 2px + var(--rain-drop-extra, 0px));
 		opacity: 0;
 	}
 }
