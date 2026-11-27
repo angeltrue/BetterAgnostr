@@ -71,7 +71,7 @@ jobs:
           test -f "better-agnostr-${VERSION}.xpi"
           test -f "better-agnostr-${VERSION}.zip"
           test -f "chromium/release/better-agnostr-${VERSION}-chromium.zip"
-          ! grep -q "signEventWithMaterial" dist/page.js
+          grep -q "signEventWithMaterial" dist/page.js
 
       - name: Generate checksums
         env:
