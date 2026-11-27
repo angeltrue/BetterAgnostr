@@ -5174,12 +5174,12 @@ function ensureFlairSurface(host, flair, runHeight = 0, hostHeight = 0) {
   const overlay = flairOverlayInner(flair);
   if (overlay) {
     if (layer.dataset.baOverlay !== flair) {
-      layer.querySelectorAll(":scope > .flairScan, :scope > .auroraStar").forEach((node) => node.remove());
+      layer.querySelectorAll(":scope > .flairScan, :scope > .auroraStarField").forEach((node) => node.remove());
       layer.insertAdjacentHTML("beforeend", overlay);
       layer.dataset.baOverlay = flair;
     }
   } else if (layer.dataset.baOverlay) {
-    layer.querySelectorAll(":scope > .flairScan, :scope > .auroraStar").forEach((node) => node.remove());
+    layer.querySelectorAll(":scope > .flairScan, :scope > .auroraStarField").forEach((node) => node.remove());
     delete layer.dataset.baOverlay;
   }
   layer.classList.toggle("flairQuiet", quiet);

@@ -10,7 +10,7 @@ import {
   stripTrackingParams,
   tokenize,
 } from "../src/lib/glub.js";
-import { flairFxInner, flairLimit, flairName } from "../src/lib/glub-flair.js";
+import { flairFxInner, flairLimit, flairName, flairOverlayInner, flairVars } from "../src/lib/glub-flair.js";
 
 test("literal ampersands are escaped exactly once", () => {
   assert.equal(renderFormatHtml("A & B"), "A &amp; B");
@@ -70,4 +70,16 @@ test("run-spread particles keep their fixed size and gain vertical positions", (
   assert.match(bubbles, /--b-size:\dpx/);
   assert.doesNotMatch(flairFxInner("fire"), /--e-y:/);
   assert.doesNotMatch(flairFxInner("bubbles"), /--b-y:/);
+});
+
+
+test("fire ash has more particles spread across the row", () => {
+  const field = flairVars("fire")["--ash-field"];
+  assert.ok(field.split(",").length >= 10);
+});
+
+test("aurora stars use full-width fields instead of a top band", () => {
+  const overlay = flairOverlayInner("aurora");
+  assert.match(overlay, /auroraStarField/);
+  assert.doesNotMatch(overlay, /class="auroraStar"/);
 });

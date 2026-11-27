@@ -1178,18 +1178,34 @@ html.retro .flairScan {
 	text-decoration-color: #c8ff5a;
 }
 
-/* Star fields are overlay elements so they can be spread down a whole run. */
-.flair-aurora .auroraStar {
+/* Full-layer star fields: the repeating backgrounds cover the whole run width,
+   unlike the old box-shadow field that stopped part way across the row. */
+.flair-aurora .auroraStarField {
 	position: absolute;
-	left: var(--as-left, 18px);
-	top: var(--as-top, 22%);
-	width: 2px;
-	height: 2px;
-	border-radius: 50%;
-	background: #ffffff;
-	box-shadow: var(--as-field, 60px -14px #ffffff, 150px 8px #cfe6ff, 260px -7px #dbe9ff);
-	opacity: 0.55;
-	animation: flairAuroraStars var(--as-dur, 6s) ease-in-out var(--as-delay, 0s) infinite alternate;
+	inset: 0;
+	pointer-events: none;
+	background-image:
+		radial-gradient(circle at 14% 22%, #ffffff 0 1px, transparent 1.8px),
+		radial-gradient(circle at 58% 68%, #cfe6ff 0 1px, transparent 1.7px),
+		radial-gradient(circle at 82% 38%, #ffffff 0 1.2px, transparent 2px),
+		radial-gradient(circle at 34% 84%, #a8ccff 0 0.9px, transparent 1.6px),
+		radial-gradient(circle at 71% 12%, #dbe9ff 0 0.8px, transparent 1.5px);
+	background-size: 137px 113px, 211px 173px, 293px 239px, 367px 307px, 449px 389px;
+	background-position: var(--as-pos-x, 0) var(--as-pos-y, 0);
+	background-repeat: repeat;
+	opacity: var(--as-op, 0.5);
+	animation: flairAuroraStarField var(--as-dur, 6s) ease-in-out var(--as-delay, 0s) infinite alternate;
+}
+
+@keyframes flairAuroraStarField {
+	from {
+		opacity: calc(var(--as-op, 0.5) * 0.55);
+		transform: translateY(-2px);
+	}
+	to {
+		opacity: var(--as-op, 0.5);
+		transform: translateY(2px);
+	}
 }
 
 /* The sky's ambient wash. Kept very soft and mostly above the text so the bright
@@ -1368,17 +1384,6 @@ html.retro .flairScan {
 	}
 	50% {
 		opacity: 0.88;
-	}
-}
-
-@keyframes flairAuroraStars {
-	from {
-		opacity: 0.28;
-		transform: translateY(-2px);
-	}
-	to {
-		opacity: 0.72;
-		transform: translateY(2px);
 	}
 }
 

@@ -2,6 +2,14 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.4.3 — flair detail hotfix
+
+- Fire ash now uses 10 particles per run instead of 8, with wider randomized spacing, more vertical scatter, and a wider drift path.
+- Aurora stars now use three full-layer repeating star fields instead of narrow box-shadow bands. Stars reach the right edge and cover the full run height.
+- Removed the old aurora star band styling and keyframes.
+- Kept the 1.4.2 flair reliability fixes and the 1.4.1 one-surface-per-run architecture.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.4.2 — flair reliability hotfix
 
 - Fixed flairs and `&g` rainbow styling being skipped after switching tabs in Agnostr. Mutation batches now process every added row instead of stopping after the first relevant node.
