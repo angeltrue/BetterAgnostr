@@ -1,7 +1,7 @@
 import panelCss from "./ui/panel.css";
 import pageCss from "./ui/page.css";
 import glubFlairCss from "./ui/glub-flair.css";
-import { flairClass, flairFxInner, flairHasFx, flairOverlayInner, flairVars, lightningStrikeMarkup } from "./lib/glub-flair.js";
+import { flairClass, flairFxInner, flairHasFx, flairLimit, flairName, flairOverlayInner, flairVars, lightningStrikeMarkup } from "./lib/glub-flair.js";
 import { EMOJI_GROUPS } from "./lib/emojis.js";
 import {
   CLIENT_PRESETS,
@@ -9,6 +9,7 @@ import {
   COLOR_NAMES,
   FLAIRS,
   FMT_MAX,
+  RICH_MAX,
   KIND_GROUPS,
   TEMPLATE_PRESETS,
   escapeHtml,
@@ -31,8 +32,10 @@ import {
   STRIPPABLE_TAGS,
   clone,
   effectiveBuild,
+  mergeSettings,
   normalizeSettings,
 } from "./lib/settings.js";
+import { VERSION } from "./lib/version.js";
 
 const api = globalThis.browser ?? globalThis.chrome;
 const NATIVE_NOTIFICATIONS_KEY = "agnostr:v2:notifications";
@@ -40,6 +43,21 @@ const NATIVE_NOTIFICATIONS_BACKUP = "betterAgnostr.nativeNotifications.v1";
 const NATIVE_SETTINGS_KEY = "agnostr:v2:settings";
 const NATIVE_SETTINGS_BACKUP = "betterAgnostr.nativeSettings.v1";
 const SETTINGS_BACKUP_KEY = "betterAgnostr.settings.backup.v1";
+const CHIME_LOCK_KEY = "betterAgnostr.lastChime.v1";
+const NATIVE_SOUND_OWNERS_KEY = "betterAgnostr.nativeSoundOwners.v1";
+const NATIVE_SOUND_OWNER_TTL = 12 * 60 * 60 * 1000;
+const TAB_ID = (() => {
+  try {
+    const key = "betterAgnostr.tabId.v1";
+    const existing = globalThis.sessionStorage.getItem(key);
+    if (existing) return existing;
+    const next = `tab-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}-${Date.now()}`;
+    globalThis.sessionStorage.setItem(key, next);
+    return next;
+  } catch {
+    return `tab-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}-${Date.now()}`;
+  }
+})();
 
 function readSettingsBackup() {
   try {
@@ -61,25 +79,58 @@ function writeSettingsBackup(settings) {
   } catch {}
 }
 
-function disableNativeSound(key, backupKey) {
+function nativeSoundOwners() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(NATIVE_SOUND_OWNERS_KEY) || "[]");
+    if (!Array.isArray(raw)) return [];
+    const cutoff = Date.now() - NATIVE_SOUND_OWNER_TTL;
+    return raw.filter((owner) => owner && typeof owner.id === "string" && Number(owner.at) >= cutoff);
+  } catch {
+    return [];
+  }
+}
+
+function writeNativeSoundOwners(owners) {
+  try {
+    if (!owners.length) localStorage.removeItem(NATIVE_SOUND_OWNERS_KEY);
+    else localStorage.setItem(NATIVE_SOUND_OWNERS_KEY, JSON.stringify(owners));
+  } catch {}
+}
+
+function setNativeSoundFlag(key, backupKey, enabled) {
   try {
     const raw = localStorage.getItem(key);
-    if (localStorage.getItem(backupKey) === null) {
-      localStorage.setItem(backupKey, JSON.stringify({ present: raw !== null, value: raw || "" }));
-    }
     let current = {};
     try {
       current = raw ? JSON.parse(raw) : {};
     } catch {
       current = {};
     }
-    localStorage.setItem(
-      key,
-      JSON.stringify({
-        ...(current && typeof current === "object" ? current : {}),
-        soundEnabled: false,
-      }),
-    );
+    if (!current || typeof current !== "object") current = {};
+    if (enabled === null) delete current.soundEnabled;
+    else current.soundEnabled = enabled;
+    if (enabled === null && !Object.keys(current).length) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(current));
+    if (enabled === null) localStorage.removeItem(backupKey);
+  } catch {}
+}
+
+function captureNativeSound(key, backupKey) {
+  try {
+    // Keep only the boolean we actually replace. Restoring a whole settings
+    // object used to roll back unrelated notification changes made meanwhile.
+    if (localStorage.getItem(backupKey) !== null) return;
+    const raw = localStorage.getItem(key);
+    let present = false;
+    let value = true;
+    try {
+      const parsed = raw ? JSON.parse(raw) : {};
+      if (parsed && typeof parsed === "object" && Object.prototype.hasOwnProperty.call(parsed, "soundEnabled")) {
+        present = true;
+        value = parsed.soundEnabled !== false;
+      }
+    } catch {}
+    localStorage.setItem(backupKey, JSON.stringify({ present, value: value === true }));
   } catch {}
 }
 
@@ -88,20 +139,39 @@ function restoreNativeSound(key, backupKey) {
     const backup = localStorage.getItem(backupKey);
     if (backup === null) return;
     const saved = JSON.parse(backup);
-    if (saved?.present) localStorage.setItem(key, String(saved.value || ""));
-    else localStorage.removeItem(key);
-    localStorage.removeItem(backupKey);
-  } catch {}
+    setNativeSoundFlag(key, backupKey, saved?.present ? saved.value !== false : null);
+  } catch {
+    try {
+      localStorage.removeItem(backupKey);
+    } catch {}
+  }
+}
+
+function claimNativeSounds() {
+  const owners = nativeSoundOwners();
+  const ours = owners.some((owner) => owner.id === TAB_ID);
+  captureNativeSound(NATIVE_NOTIFICATIONS_KEY, NATIVE_NOTIFICATIONS_BACKUP);
+  captureNativeSound(NATIVE_SETTINGS_KEY, NATIVE_SETTINGS_BACKUP);
+  setNativeSoundFlag(NATIVE_NOTIFICATIONS_KEY, NATIVE_NOTIFICATIONS_BACKUP, false);
+  setNativeSoundFlag(NATIVE_SETTINGS_KEY, NATIVE_SETTINGS_BACKUP, false);
+  if (!ours) owners.push({ id: TAB_ID, at: Date.now() });
+  writeNativeSoundOwners(owners);
+}
+
+function releaseNativeSounds() {
+  const owners = nativeSoundOwners().filter((owner) => owner.id !== TAB_ID);
+  writeNativeSoundOwners(owners);
+  if (owners.length) return;
+  restoreNativeSound(NATIVE_NOTIFICATIONS_KEY, NATIVE_NOTIFICATIONS_BACKUP);
+  restoreNativeSound(NATIVE_SETTINGS_KEY, NATIVE_SETTINGS_BACKUP);
 }
 
 function overrideNativeSounds() {
-  disableNativeSound(NATIVE_NOTIFICATIONS_KEY, NATIVE_NOTIFICATIONS_BACKUP);
-  disableNativeSound(NATIVE_SETTINGS_KEY, NATIVE_SETTINGS_BACKUP);
+  claimNativeSounds();
 }
 
 function restoreNativeSounds() {
-  restoreNativeSound(NATIVE_NOTIFICATIONS_KEY, NATIVE_NOTIFICATIONS_BACKUP);
-  restoreNativeSound(NATIVE_SETTINGS_KEY, NATIVE_SETTINGS_BACKUP);
+  releaseNativeSounds();
 }
 
 const FONT_PRESETS = [
@@ -147,6 +217,7 @@ const state = {
   pageToken: `ba-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}-${Date.now()}`,
   pageReady: false,
   helloAttempts: 0,
+  enabledReady: false,
   status: null,
   events: new Map(),
   aliases: new Map(),
@@ -157,10 +228,14 @@ const state = {
   ui: {},
   activeTab: "studio",
   viewer: null,
+  viewerRequestSeq: 0,
   review: null,
   reviewQueue: [],
+  modalOpen: null,
+  modalReturnFocus: null,
   logFilter: "",
   buildError: "",
+  buildStale: false,
   buildFetching: false,
   lastOutgoingId: null,
   decoratedRows: new Set(),
@@ -168,10 +243,12 @@ const state = {
   betterPeers: new Map(),
   peerClients: new Map(),
   emojiCategory: "smileys",
-  lastBitchatReplace: 0,
   lastBetterClients: 0,
+  betterClientsTimer: null,
   lastCallMaintenance: 0,
+  callMaintenanceTimer: null,
   settingsEpoch: 0,
+  fontCssSignature: "",
   enhancePending: false,
   obfCache: [],
   obfNextScan: 0,
@@ -185,6 +262,7 @@ const state = {
   entities: new Map(),
   restoreMap: new WeakMap(),
   richObservers: new WeakMap(),
+  richRoots: new Set(),
   richRepairing: new WeakSet(),
   repairingRows: new WeakSet(),
   logRenderTimer: null,
@@ -232,27 +310,6 @@ function obfGlyph(ch) {
   return ch;
 }
 
-function obfuscateText(real, rate) {
-  const chars = [...real];
-  if (rate >= 1) return chars.map(obfGlyph).join("");
-  if (Math.random() > 0.32) return real;
-  const candidates = [];
-  for (let i = 0; i < chars.length; i++) {
-    if (OBF_BUCKETS.some((bucket) => bucket.includes(chars[i]))) candidates.push(i);
-  }
-  if (!candidates.length) return real;
-  for (let i = candidates.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-  }
-  const count = Math.min(2, 1 + (Math.random() < 0.3 ? 1 : 0), candidates.length);
-  for (let i = 0; i < count; i++) {
-    const index = candidates[i];
-    chars[index] = obfGlyph(chars[index]);
-  }
-  return chars.join("");
-}
-
 const obfBursts = new WeakMap();
 
 function startObfBurst(real, now) {
@@ -273,7 +330,10 @@ function startObfBurst(real, now) {
 function tickObfuscation() {
   if (document.hidden) return;
   const now = performance.now();
-  if (!state.obfCache.length || now >= state.obfNextScan) {
+  // Scan on a slow clock even when the cache is empty. The old condition also
+  // re-queried whenever the cache was empty, turning this into a 10 Hz full-document
+  // query on every page with no obfuscated text.
+  if (now >= state.obfNextScan) {
     state.obfCache = [...document.querySelectorAll(".fmtObf")];
     if (state.shadow) state.obfCache.push(...state.shadow.querySelectorAll(".fmtObf"));
     state.obfNextScan = now + 1200;
@@ -287,10 +347,10 @@ function tickObfuscation() {
     const real = el.dataset.obfText;
     if (!real) continue;
     if (still) {
-      if (!el.dataset.obfStatic) {
-        el.textContent = obfuscateText(real, 1);
-        el.dataset.obfStatic = "1";
-      }
+      // Prefer readable text for reduced-motion users instead of freezing a
+      // permanently scrambled string that screen readers and users cannot parse.
+      if (el.textContent !== real) el.textContent = real;
+      el.dataset.obfStatic = "1";
       continue;
     }
     let burst = obfBursts.get(el);
@@ -403,9 +463,12 @@ function debounceSave() {
 }
 
 async function persistSettings() {
-  writeSettingsBackup(state.settings);
   try {
     await api.storage.local.set({ [STORAGE_KEY]: state.settings });
+    // Only advance the backup after the authoritative write succeeds. The old
+    // order let a failed extension-storage write leave a newer backup that was
+    // then ignored on the next load.
+    writeSettingsBackup(state.settings);
   } catch (err) {
     console.warn("[Better Agnostr] could not save settings", err);
   }
@@ -422,7 +485,6 @@ function updateSettings(mutator, { broadcast = true, sync = true } = {}) {
   state.settingsEpoch += 1;
   state.lastBetterClients = 0;
   state.lastCallMaintenance = 0;
-  state.lastBitchatReplace = 0;
   debounceSave();
   if (broadcast) broadcastConfig();
   if (sync) {
@@ -450,10 +512,7 @@ function sendPage(type, payload = {}, id) {
   state.sendSeq += 1;
   const envelope = { __ba: true, dir: "ui", token: state.pageToken, seq: state.sendSeq, type, payload, id };
   try {
-    window.postMessage(envelope, "*");
-  } catch {}
-  try {
-    document.dispatchEvent(new CustomEvent("ba-ui", { detail: JSON.stringify(envelope) }));
+    window.postMessage(envelope, location.origin);
   } catch {}
 }
 
@@ -485,12 +544,16 @@ async function refreshBuild(force = false) {
   try {
     const res = await api.runtime.sendMessage({ type: "getGlubBuild", force });
     if (res?.build) {
+      state.buildStale = !!res.stale;
       state.buildError = res.stale && res.error ? `Using cached build: ${res.error}` : "";
-      state.settings.glub.build = String(res.build);
+      const nextBuild = String(res.build);
+      const changed = state.settings.glub.build !== nextBuild;
+      state.settings.glub.build = nextBuild;
       state.settings.glub.buildFetchedAt = Number(res.fetchedAt) || Date.now();
-      markSettingsDirty();
+      if (changed) markSettingsDirty();
       syncDynamic();
     } else if (res?.error) {
+      state.buildStale = false;
       state.buildError = String(res.error);
       syncDynamic();
     }
@@ -503,10 +566,13 @@ async function refreshBuild(force = false) {
 }
 
 function handlePageMessage(event) {
+  if (event.source && event.source !== window && event.source !== window.wrappedJSObject) return;
+  if (event.origin && event.origin !== location.origin) return;
   const data = event?.data;
   if (!data || data.__ba !== true || data.dir !== "page") return;
+  if (!data.token || data.token !== state.pageToken) return;
   if (data.seq != null) {
-    const key = `seq:${data.seq}`;
+    const key = `${data.token || ""}:seq:${data.seq}`;
     if (state.pageSeen.has(key)) return;
     state.pageSeen.add(key);
     if (state.pageSeen.size > 300) {
@@ -518,7 +584,8 @@ function handlePageMessage(event) {
 }
 
 function handlePageData(data) {
-  if (data.token && data.token !== state.pageToken) return;
+  if (!data.token || data.token !== state.pageToken) return;
+  if (!state.enabledReady || state.settings.enabled === false) return;
 
   if (data.id && state.pending.has(data.id)) {
     const fn = state.pending.get(data.id);
@@ -540,8 +607,16 @@ function handlePageData(data) {
       });
       refreshBuild(false);
       break;
-    case "status":
+    case "status": {
+      const previous = state.status || {};
       state.status = data.payload || {};
+      if (
+        previous.pubkey !== state.status.pubkey ||
+        previous.nip07Patched !== state.status.nip07Patched ||
+        previous.eventCount !== state.status.eventCount
+      ) {
+        scheduleEnhance();
+      }
       if (state.status.build) {
         // The page's build value comes from our config, so only copy it when we
         // have nothing better cached.
@@ -553,9 +628,10 @@ function handlePageData(data) {
       }
       syncFooter();
       syncBuildBadges();
-        scheduleSettingsSync();
+      scheduleSettingsSync();
       if (state.activeTab === "relay") renderRelay();
       break;
+    }
     case "logs": {
       const logs = data.payload?.logs || [];
       appendLogs(logs);
@@ -576,6 +652,10 @@ function handlePageData(data) {
     case "alias": {
       if (data.payload?.from && data.payload?.to) {
         state.aliases.set(data.payload.from, data.payload.to);
+        if (state.aliases.size > 1000) {
+          const first = state.aliases.keys().next().value;
+          if (first) state.aliases.delete(first);
+        }
         scheduleEnhance();
       }
       break;
@@ -591,22 +671,31 @@ function handlePageData(data) {
           const build = effectiveBuild(state.settings);
           sendPage(
             "response",
-            { build, fetchedAt: state.settings.glub.buildFetchedAt, error: state.buildError },
+            { build, fetchedAt: state.settings.glub.buildFetchedAt, error: state.buildError, stale: state.buildStale },
             reqId,
           );
         })
         .catch((err) => {
-          sendPage("response", { build: effectiveBuild(state.settings), fetchedAt: state.settings.glub.buildFetchedAt, error: String(err) }, reqId);
+          sendPage("response", { build: effectiveBuild(state.settings), fetchedAt: state.settings.glub.buildFetchedAt, error: String(err), stale: state.buildStale }, reqId);
         });
       break;
     }
     case "review": {
+      const proposed = data.payload?.proposed;
+      if (!proposed || typeof proposed !== "object" || !Array.isArray(proposed.tags)) {
+        if (data.id) sendPage("response", { action: "cancel" }, data.id);
+        break;
+      }
       queueReview(data.payload || {}, data.id);
       break;
     }
     case "verified": {
       if (state.viewer?.event?.id) {
         state.verified.set(state.viewer.event.id, data.payload);
+        if (state.verified.size > 500) {
+          const first = state.verified.keys().next().value;
+          if (first) state.verified.delete(first);
+        }
         if (state.viewer.tab === "verify") renderViewer();
       }
       break;
@@ -614,6 +703,10 @@ function handlePageData(data) {
     case "entities": {
       if (state.viewer?.event?.id) {
         state.entities.set(state.viewer.event.id, data.payload || {});
+        if (state.entities.size > 500) {
+          const first = state.entities.keys().next().value;
+          if (first) state.entities.delete(first);
+        }
         renderViewer();
       }
       break;
@@ -623,33 +716,45 @@ function handlePageData(data) {
   }
 }
 
-function handlePageCustomEvent(event) {
-  try {
-    const data = typeof event.detail === "string" ? JSON.parse(event.detail) : event.detail;
-    if (!data || data.__ba !== true || data.dir !== "page") return;
-    if (data.seq != null) {
-      const key = `seq:${data.seq}`;
-      if (state.pageSeen.has(key)) return;
-      state.pageSeen.add(key);
-      if (state.pageSeen.size > 300) {
-        const first = state.pageSeen.values().next().value;
-        if (first) state.pageSeen.delete(first);
-      }
-    }
-    handlePageData(data);
-  } catch {}
-}
-
 // ---------------------------------------------------------------------------
 // Event data
 // ---------------------------------------------------------------------------
 
+function isValidEventShape(ev) {
+  return (
+    ev &&
+    typeof ev === "object" &&
+    typeof ev.id === "string" &&
+    /^[0-9a-f]{64}$/i.test(ev.id) &&
+    typeof ev.pubkey === "string" &&
+    (ev._reconstructed ? true : /^[0-9a-f]{64}$/i.test(ev.pubkey)) &&
+    Number.isFinite(ev.kind) &&
+    Number.isFinite(ev.created_at) &&
+    typeof ev.content === "string" &&
+    Array.isArray(ev.tags)
+  );
+}
+
 function rememberEvent(ev) {
-  if (!ev || typeof ev.id !== "string") return;
-  if (!state.events.has(ev.id)) state.events.set(ev.id, ev);
+  if (!isValidEventShape(ev)) return false;
+  const existing = state.events.get(ev.id);
+  let changed = false;
+  if (!existing) {
+    state.events.set(ev.id, ev);
+    changed = true;
+  } else if (existing._reconstructed && !ev._reconstructed) {
+    state.events.set(ev.id, ev);
+    changed = true;
+  }
   if (ev.pubkey && Array.isArray(ev.tags)) {
     const pubkey = String(ev.pubkey).toLowerCase();
-    if (isBetterClient(ev)) state.betterPeers.set(pubkey, eventHandle(ev));
+    if (isBetterClient(ev)) {
+      state.betterPeers.set(pubkey, eventHandle(ev));
+      if (state.betterPeers.size > 2000) {
+        const first = state.betterPeers.keys().next().value;
+        if (first) state.betterPeers.delete(first);
+      }
+    }
     const client = String(getTagValue(ev.tags, "client") || "").trim();
     if (client) {
       const at = Number(ev.created_at) || 0;
@@ -662,10 +767,12 @@ function rememberEvent(ev) {
     }
   }
   // Bound memory.
-  if (state.events.size > 1500) {
+  const cap = Math.max(100, Math.min(5000, Number(state.settings.inspector?.maxEvents) || 1500));
+  if (state.events.size > cap) {
     const first = state.events.keys().next().value;
     if (first) state.events.delete(first);
   }
+  return changed;
 }
 
 function eventById(id) {
@@ -678,14 +785,16 @@ function eventById(id) {
 
 function appendLogs(logs) {
   if (!Array.isArray(logs) || !logs.length) return;
-  const internalKinds = new Set([25050, 25055, 25058, 25059, 30078]);
+  const internalKinds = new Set([25050, 25051, 25052, 25053, 25054, 25055, 25058, 25059, 30078]);
+  let changed = false;
   for (const log of logs) {
-    if (log.event) rememberEvent(log.event);
+    if (!log || typeof log !== "object") continue;
+    if (log.event && rememberEvent(log.event)) changed = true;
     if (log.dir === "out" && log.eventId) {
       state.ownEventIds.add(log.eventId);
       if (!internalKinds.has(log.kind)) state.lastOutgoingId = log.eventId;
     }
-    if (log.dir === "in" && log.event) handleIncomingAlert(log.event);
+    if (log.dir === "in" && log.event && isValidEventShape(log.event)) handleIncomingAlert(log.event);
   }
   state.logs.push(...logs);
   if (state.logs.length > 300) state.logs.splice(0, state.logs.length - 300);
@@ -693,10 +802,9 @@ function appendLogs(logs) {
     const first = state.ownEventIds.values().next().value;
     if (first) state.ownEventIds.delete(first);
   }
-  scheduleEnhance();
+  if (changed) scheduleEnhance();
   renderRelaySoon();
   syncLastOutgoing();
-  scheduleSettingsSync();
 }
 
 function isMentionEvent(event) {
@@ -707,11 +815,21 @@ function isMentionEvent(event) {
       if (Array.isArray(tag) && tag[0] === "p" && String(tag[1] || "").toLowerCase() === own) return true;
     }
   }
-  const name = state.status?.nickname || "";
+  const name = String(state.status?.nickname || "").toLowerCase();
+  if (!name) return false;
   const tag = own ? own.slice(-4) : "";
-  const content = String(event.content || "");
-  if (name && content.toLowerCase().includes(`@${name.toLowerCase()}`)) return true;
-  if (name && tag && content.toLowerCase().includes(`@${name.toLowerCase()}#${tag}`)) return true;
+  const content = String(event.content || "").toLowerCase();
+  const needles = [`@${name}`, ...(tag ? [`@${name}#${tag}`] : [])];
+  for (const needle of needles) {
+    let start = content.indexOf(needle);
+    while (start !== -1) {
+      const before = start === 0 ? "" : content[start - 1];
+      const end = start + needle.length;
+      const after = content[end] || "";
+      if (!/[a-z0-9_]/i.test(before) && !/[a-z0-9_]/i.test(after)) return true;
+      start = content.indexOf(needle, start + 1);
+    }
+  }
   return false;
 }
 
@@ -719,7 +837,7 @@ function alertKind(event) {
   const kind = Number(event?.kind);
   if (kind === 20000 || kind === 23333) return isMentionEvent(event) ? "mention" : "chat";
   if (kind === 4 || kind === 14 || kind === 1059) return "dm";
-  if (kind === 25050) return "call";
+  if (kind >= 25050 && kind <= 25059) return "call";
   return "";
 }
 
@@ -745,9 +863,15 @@ function handleIncomingAlert(event) {
   if (!Number.isFinite(age) || age < -10 || age > 15) return;
   const own = state.status?.pubkey?.toLowerCase();
   if (own && String(event.pubkey || "").toLowerCase() === own) return;
-  if (Date.now() - state.lastChimeAt < 350) return;
-  state.lastChimeAt = Date.now();
   state.seenChimeIds.add(event.id);
+  const now = Date.now();
+  if (now - state.lastChimeAt < 350) return;
+  try {
+    const shared = Number(localStorage.getItem(CHIME_LOCK_KEY) || 0);
+    if (now - shared < 350) return;
+    localStorage.setItem(CHIME_LOCK_KEY, String(now));
+  } catch {}
+  state.lastChimeAt = now;
   if (state.seenChimeIds.size > 1000) {
     const first = state.seenChimeIds.values().next().value;
     if (first) state.seenChimeIds.delete(first);
@@ -804,27 +928,106 @@ function ensureHost() {
   updatePanelVisibility();
 }
 
+function modalWrap(which) {
+  return state.shadow?.querySelector(`[data-modal='${which}']`) || null;
+}
+
+function modalFocusable(wrap) {
+  if (!wrap) return [];
+  return [...wrap.querySelectorAll(
+    'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter((el) => el instanceof HTMLElement && !el.hidden && el.getAttribute("aria-hidden") !== "true");
+}
+
+function setModalOpen(which, open) {
+  const wrap = modalWrap(which);
+  if (!wrap) return;
+  if (open && state.modalOpen && state.modalOpen !== which) setModalOpen(state.modalOpen, false);
+  wrap.hidden = !open;
+  wrap.classList.toggle("is-open", open);
+  wrap.setAttribute("aria-hidden", open ? "false" : "true");
+  if ("inert" in wrap) wrap.inert = !open;
+  if (open) {
+    wrap.removeAttribute("inert");
+    state.modalOpen = which;
+    state.modalReturnFocus = document.activeElement;
+    window.requestAnimationFrame(() => {
+      if (state.modalOpen !== which) return;
+      const dialog = wrap.querySelector("[role='dialog']");
+      const first = modalFocusable(wrap)[0];
+      if (first instanceof HTMLElement) first.focus();
+      else if (dialog instanceof HTMLElement) {
+        dialog.setAttribute("tabindex", "-1");
+        dialog.focus();
+      }
+    });
+  } else {
+    wrap.setAttribute("inert", "");
+    if (state.modalOpen === which) state.modalOpen = null;
+    const target = state.modalReturnFocus;
+    state.modalReturnFocus = null;
+    if (target instanceof HTMLElement && target.isConnected) {
+      try {
+        target.focus({ preventScroll: true });
+      } catch {}
+    }
+  }
+}
+
+function trapModalKey(event) {
+  if (!state.modalOpen) return false;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    if (state.modalOpen === "review") finishReview("cancel");
+    else if (state.modalOpen === "action") closeActionModal();
+    else if (state.modalOpen === "viewer") closeViewer();
+    return true;
+  }
+  if (event.key !== "Tab") return false;
+  const wrap = modalWrap(state.modalOpen);
+  const items = modalFocusable(wrap);
+  if (!items.length) {
+    event.preventDefault();
+    return true;
+  }
+  const active = state.shadow?.activeElement || document.activeElement;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (event.shiftKey && (active === first || !items.includes(active))) {
+    event.preventDefault();
+    last.focus();
+    return true;
+  }
+  if (!event.shiftKey && (active === last || !items.includes(active))) {
+    event.preventDefault();
+    first.focus();
+    return true;
+  }
+  return false;
+}
+
 function shellHtml() {
   return `
-  <div class="ba-modal-wrap" data-modal="viewer" aria-hidden="true">
+  <div class="ba-modal-wrap" data-modal="viewer" aria-hidden="true" hidden>
     <div class="ba-modal-backdrop" data-close-modal="viewer"></div>
     <div class="ba-modal" role="dialog" aria-modal="true" aria-label="Event details">
       <div data-role="viewer-content"></div>
     </div>
   </div>
-  <div class="ba-modal-wrap" data-modal="review" aria-hidden="true">
+  <div class="ba-modal-wrap" data-modal="review" aria-hidden="true" hidden>
     <div class="ba-modal-backdrop" data-close-modal="review"></div>
     <div class="ba-modal small" role="dialog" aria-modal="true" aria-label="Review outgoing event">
       <div data-role="review-content"></div>
     </div>
   </div>
-  <div class="ba-modal-wrap" data-modal="action" aria-hidden="true">
+  <div class="ba-modal-wrap" data-modal="action" aria-hidden="true" hidden>
     <div class="ba-modal-backdrop" data-close-modal="action"></div>
     <div class="ba-modal small" role="dialog" aria-modal="true" aria-label="Custom action">
       <div data-role="action-content"></div>
     </div>
   </div>
-  <div class="ba-toasts" data-role="toasts"></div>
+  <div class="ba-toasts" data-role="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 `;
 }
 
@@ -840,7 +1043,7 @@ function injectPageStyles() {
     flairStyle.textContent = glubFlairCss;
     head.appendChild(flairStyle);
   }
-  if (!state.pageStyle) {
+  if (!state.pageStyle || !state.pageStyle.isConnected) {
     const existing = document.getElementById("ba-page-css");
     if (existing) state.pageStyle = existing;
     else {
@@ -870,7 +1073,8 @@ function applyUiPreferences() {
 function applyTheme() {
   const head = document.head || document.documentElement;
   if (!head) return;
-  if (!state.themeStyle) {
+  if (!state.themeStyle || !state.themeStyle.isConnected) {
+    state.themeCssSignature = "";
     state.themeStyle = document.getElementById("ba-theme-css");
     if (!state.themeStyle) {
       state.themeStyle = document.createElement("style");
@@ -880,6 +1084,10 @@ function applyTheme() {
   }
   applyRainbowStyle();
   applyUiPreferences();
+  if (state.themeStyle.parentNode === head && head.lastElementChild !== state.themeStyle) {
+    // Keep BA's custom CSS behind late-injected app stylesheets.
+    head.appendChild(state.themeStyle);
+  }
   const theme = themeById(state.settings.theme.preset);
   const themeCss = theme ? buildThemeCss(theme) : "";
   if (theme) document.documentElement.dataset.baTheme = theme.id;
@@ -895,7 +1103,7 @@ function applyTheme() {
 function safeFontUrl(url) {
   const value = String(url || "").trim();
   if (!value) return "";
-  if (!/^(https?:|moz-extension:|data:font)/i.test(value)) return "";
+  if (!/^(https:|moz-extension:|chrome-extension:|data:font)/i.test(value)) return "";
   return value;
 }
 
@@ -903,7 +1111,8 @@ function applyFont() {
   const head = document.head || document.documentElement;
   if (!head) return;
   let style = document.getElementById("ba-font-css");
-  if (!style) {
+  if (!style || !style.isConnected) {
+    state.fontCssSignature = "";
     style = document.createElement("style");
     style.id = "ba-font-css";
     head.appendChild(style);
@@ -935,7 +1144,7 @@ function applyFont() {
   let extra = "";
   let stack = family.stack || "";
   if (f.family === "custom") {
-    const customFamily = String(f.customFamily || "").replace(/["'{};]/g, "").trim();
+    const customFamily = String(f.customFamily || "").replace(/[\\"'{};\r\n]/g, "").trim();
     const url = safeFontUrl(f.customUrl);
     if (url) {
       extra = `@font-face{font-family:"BA Custom";src:url(${JSON.stringify(url)});font-style:normal;font-display:swap}`;
@@ -944,16 +1153,14 @@ function applyFont() {
       stack = `"${customFamily}", sans-serif`;
     }
   }
-  if (!stack) {
-    style.textContent = bundled;
-    return;
-  }
-  const vars = family.mono
-    ? `--font-sans: ${stack} !important; --font-mono: ${stack} !important;`
-    : `--font-sans: ${stack} !important;`;
-  style.textContent = `${bundled}
+  const css = !stack
+    ? bundled
+    : `${bundled}
 ${extra}
-html:root{${vars}}`;
+html:root{${family.mono ? `--font-sans: ${stack} !important; --font-mono: ${stack} !important;` : `--font-sans: ${stack} !important;`}}`;
+  if (css === state.fontCssSignature) return;
+  state.fontCssSignature = css;
+  style.textContent = css;
 }
 
 function applyCallCss() {
@@ -985,22 +1192,35 @@ function isCallControlText(text) {
 
 function removeCallMenuItems() {
   const calls = state.settings.privacy.calls;
-  if (!calls.disable) return;
+  if (!calls.disable) {
+    for (const item of document.querySelectorAll("[data-ba-call-disabled]")) {
+      if (!(item instanceof HTMLElement)) continue;
+      item.disabled = false;
+      item.style.display = item.dataset.baCallDisplay || "";
+      delete item.dataset.baCallDisplay;
+      delete item.dataset.baCallDisabled;
+    }
+    return;
+  }
   for (const label of document.querySelectorAll(".ag-ctx-item-label")) {
     if (!isCallControlText(label.textContent)) continue;
     const item = label.closest(".ag-ctx-item");
     if (!item) continue;
     item.disabled = true;
     item.dataset.baCallDisabled = "1";
-    if (calls.hideUi) item.style.display = "none";
+    if (calls.hideUi) {
+      if (item.dataset.baCallDisplay === undefined) item.dataset.baCallDisplay = item.style.display;
+      item.style.display = "none";
+    }
   }
 }
 
 function hideCallUi() {
   const calls = state.settings.privacy.calls;
-  if (!calls.disable) {
+  if (!calls.disable || !calls.hideUi) {
     for (const el of document.querySelectorAll("[data-ba-call-ui-hidden]")) {
-      el.style.removeProperty("display");
+      el.style.display = el.dataset.baCallDisplay || "";
+      delete el.dataset.baCallDisplay;
       delete el.dataset.baCallUiHidden;
     }
     return;
@@ -1010,12 +1230,14 @@ function hideCallUi() {
   )) {
     if (!(el instanceof HTMLElement)) continue;
     if (el.closest(".ag-settings-modal, .ba-better-overlay, .ba-about-overlay")) continue;
+    if (el.dataset.baCallDisplay === undefined) el.dataset.baCallDisplay = el.style.display;
     el.style.display = "none";
     el.dataset.baCallUiHidden = "1";
   }
   for (const section of document.querySelectorAll(".ag-sheet-section")) {
     const title = section.querySelector(".ag-sheet-section-title")?.textContent || "";
     if (!section.querySelector(".ag-sheet-call-card") && !/group call|voice call|video call/i.test(title)) continue;
+    if (section.dataset.baCallDisplay === undefined) section.dataset.baCallDisplay = section.style.display;
     section.style.display = "none";
     section.dataset.baCallUiHidden = "1";
   }
@@ -1028,24 +1250,31 @@ function applyCallButtons() {
     if (btn.closest(".ag-settings-modal")) continue;
     const text = `${btn.textContent || ""} ${btn.getAttribute("aria-label") || ""} ${btn.title || ""}`.replace(/\s+/g, " ").trim();
     if (!isCallControlText(text)) continue;
-    btn.disabled = blocked;
-    btn.classList.toggle("ba-call-disabled", blocked);
     if (blocked) {
-      if (btn.classList.contains("ag-sheet-action-btn") || calls.hideUi) {
+      btn.disabled = true;
+      btn.dataset.baCallDisabled = "1";
+      btn.classList.add("ba-call-disabled");
+    } else if (btn.dataset.baCallDisabled === "1") {
+      btn.disabled = false;
+      delete btn.dataset.baCallDisabled;
+      btn.classList.remove("ba-call-disabled");
+    }
+    if (blocked) {
+      if (calls.hideUi) {
+        if (btn.dataset.baCallDisplay === undefined) btn.dataset.baCallDisplay = btn.style.display;
         btn.style.display = "none";
         btn.dataset.baCallHidden = "1";
       }
-    } else {
-      if (btn.dataset.baCallHidden === "1") {
-        btn.style.removeProperty("display");
-        delete btn.dataset.baCallHidden;
-      }
-      btn.classList.remove("ba-call-disabled");
+    } else if (btn.dataset.baCallHidden === "1") {
+      btn.style.display = btn.dataset.baCallDisplay || "";
+      delete btn.dataset.baCallDisplay;
+      delete btn.dataset.baCallHidden;
     }
   }
 }
 
 function blockCallControlClick(event) {
+  if (!state.enabledReady || state.settings.enabled === false) return;
   if (!state.settings.privacy.calls.disable) return;
   const target = event.target;
   if (!(target instanceof Element)) return;
@@ -1103,7 +1332,7 @@ function glubThemeGroupHtml() {
 function customCssGroupHtml() {
   return `<div class="ag-set-group ba-glub-css-group" data-ba-settings-group="css">
     <div class="ba-set-label-row"><span class="ag-set-label">Better Agnostr custom CSS</span><button type="button" class="ba-set-link" data-ba-settings-action="reset-css">clear</button></div>
-    <textarea class="ag-input ba-set-css" data-ba-setting="theme.customCss" spellcheck="false" rows="4" placeholder="html:root { --accent: #ff4ecd; }">${h(state.settings.theme.customCss)}</textarea>
+    <textarea class="ag-input ba-set-css" data-ba-setting="theme.customCss" aria-label="Better Agnostr custom CSS" spellcheck="false" rows="4" placeholder="html:root { --accent: #ff4ecd; }">${h(state.settings.theme.customCss)}</textarea>
     <div class="ba-set-note">Injected after the selected theme. Use html:root for variable overrides.</div>
   </div>`;
 }
@@ -1146,9 +1375,9 @@ function betterSettingsPaneHtml() {
   ];
   return `<div class="ba-settings-shell" data-ba-better-pane="1">
     <div class="ba-set-tabs" role="tablist" aria-label="Better Agnostr sections">
-      ${tabs.map(([id, label]) => `<button type="button" class="ba-set-tab${state.betterTab === id ? " is-active" : ""}" data-ba-better-tab="${id}" role="tab">${label}</button>`).join("")}
+      ${tabs.map(([id, label]) => `<button type="button" class="ba-set-tab${state.betterTab === id ? " is-active" : ""}" data-ba-better-tab="${id}" id="ba-tab-${id}" role="tab" aria-selected="${state.betterTab === id ? "true" : "false"}" aria-controls="ba-tabpanel-${id}" tabindex="${state.betterTab === id ? "0" : "-1"}">${label}</button>`).join("")}
     </div>
-    <div class="ba-set-content" data-ba-better-content></div>
+    <div class="ba-set-content" data-ba-better-content role="tabpanel" id="ba-tabpanel-${state.betterTab}" aria-labelledby="ba-tab-${state.betterTab}"></div>
   </div>`;
 }
 
@@ -1167,7 +1396,7 @@ function betterLineHtml() {
         <span class="ag-set-label">Line format</span>
         <span class="ba-set-count" data-ba-template-count></span>
       </div>
-      <input class="ag-input ba-set-template" data-ba-setting="studio.template" maxlength="200" spellcheck="false" autocomplete="off" value="${h(template)}" placeholder="&l{name}&7{tag}&f: {msg}">
+      <input class="ag-input ba-set-template" data-ba-setting="studio.template" aria-label="Line format template" maxlength="200" spellcheck="false" autocomplete="off" value="${h(template)}" placeholder="&l{name}&7{tag}&f: {msg}">
       <div class="ba-set-chips">
         <button type="button" class="ba-set-chip" data-ba-template-placeholder="{name}">{name}</button>
         <button type="button" class="ba-set-chip" data-ba-template-placeholder="{tag}">{tag}</button>
@@ -1191,8 +1420,8 @@ function betterLineHtml() {
     <div class="ag-set-group">
       <span class="ag-set-label">Flair</span>
       <div class="ba-set-flairs">
-        <button type="button" class="ba-set-flair${!state.settings.studio.flair ? " active" : ""}" data-ba-flair-choice="">none</button>
-        ${FLAIRS.map((f) => `<button type="button" class="ba-set-flair${state.settings.studio.flair === f.name ? " active" : ""}${f.gated ? " gated" : ""}" data-ba-flair-choice="${f.name}" title="${h(f.description)}">${h(f.label)}</button>`).join("")}
+        <button type="button" class="ba-set-flair${!state.settings.studio.flair ? " active" : ""}" data-ba-flair-choice="" aria-pressed="${!state.settings.studio.flair ? "true" : "false"}">none</button>
+        ${FLAIRS.map((f) => `<button type="button" class="ba-set-flair${state.settings.studio.flair === f.name ? " active" : ""}${f.gated ? " gated" : ""}" data-ba-flair-choice="${f.name}" aria-pressed="${state.settings.studio.flair === f.name ? "true" : "false"}" title="${h(f.description)}">${h(f.label)}</button>`).join("")}
       </div>
     </div>
 
@@ -1209,7 +1438,7 @@ function betterClientHtml() {
   return `
     <div class="ag-set-group">
       <span class="ag-set-label">Client tag</span>
-      <input class="ag-input" data-ba-setting="client.name" maxlength="64" spellcheck="false" autocomplete="off" value="${h(state.settings.client.name)}">
+      <input class="ag-input" data-ba-setting="client.name" aria-label="Client tag" maxlength="64" spellcheck="false" autocomplete="off" value="${h(state.settings.client.name)}">
       <div class="ba-set-chips">
         ${CLIENT_PRESETS.map((name) => `<button type="button" class="ba-set-chip" data-ba-client-preset="${h(name)}">${h(name)}</button>`).join("")}
       </div>
@@ -1219,7 +1448,7 @@ function betterClientHtml() {
       <div class="ba-set-policies">
         ${KIND_GROUPS.map((g) => `<div class="ba-set-policy">
           <span>${h(g.label)}</span>
-          <select class="ag-input ba-set-select" data-ba-client-policy="${g.id}">
+          <select class="ag-input ba-set-select" data-ba-client-policy="${g.id}" aria-label="${h(g.label)} client policy">
             ${KIND_POLICIES.map((p) => `<option value="${p}"${policies[g.id] === p ? " selected" : ""}>${p}</option>`).join("")}
           </select>
         </div>`).join("")}
@@ -1233,8 +1462,13 @@ function renderBetterTabContent(modal) {
   if (!content) return;
   if (state.betterTab === "client") content.innerHTML = betterClientHtml();
   else content.innerHTML = betterLineHtml();
+  content.id = `ba-tabpanel-${state.betterTab}`;
+  content.setAttribute("aria-labelledby", `ba-tab-${state.betterTab}`);
   for (const tab of modal.querySelectorAll("[data-ba-better-tab]")) {
-    tab.classList.toggle("is-active", tab.getAttribute("data-ba-better-tab") === state.betterTab);
+    const active = tab.getAttribute("data-ba-better-tab") === state.betterTab;
+    tab.classList.toggle("is-active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+    tab.tabIndex = active ? 0 : -1;
   }
   state.betterPreviewSig = "";
   if (state.betterTab === "line") renderBetterPreview(modal);
@@ -1270,8 +1504,8 @@ function renderBetterPreview(modal) {
   const el = modal.querySelector("[data-ba-settings-preview]");
   if (!el) return;
   const s = state.settings;
-  const template = s.studio.template;
-  const flair = s.studio.flair;
+  const template = s.studio.enabled ? s.studio.template : "";
+  const flair = s.studio.enabled ? s.studio.flair : "";
   const name = state.status?.nickname || "you";
   const tag = (state.status?.pubkey || "a1b2c3d4").slice(-4);
   const msg = PREVIEW_MESSAGE;
@@ -1320,6 +1554,7 @@ function syncBetterSettings(modal) {
   for (const el of modal.querySelectorAll("[data-ba-flair-choice]")) {
     const active = (el.getAttribute("data-ba-flair-choice") || "") === (state.settings.studio.flair || "");
     el.classList.toggle("active", active);
+    el.setAttribute("aria-pressed", active ? "true" : "false");
   }
   const count = modal.querySelector("[data-ba-template-count]");
   if (count) {
@@ -1348,6 +1583,9 @@ function ensureBetterNav(modal) {
   nav = source.cloneNode(true);
   nav.classList.remove("active");
   nav.removeAttribute("aria-current");
+  nav.removeAttribute("id");
+  nav.removeAttribute("aria-controls");
+  nav.removeAttribute("aria-describedby");
   nav.setAttribute("data-ba-settings-nav", "1");
   const icon = nav.querySelector(".ag-set-nav-icon");
   if (icon) {
@@ -1381,6 +1619,7 @@ function nativeSettingsNav(modal) {
 // detail pane after a native nav item click. Our cloned nav items have no React
 // handler, so open the native detail view first, then render our pane into it.
 function enterSettingsMobileDetail(modal) {
+  if (!window.matchMedia?.("(max-width: 867px)")?.matches) return false;
   if (!modal.classList.contains("mobile-menu")) return false;
   if (modal.dataset.baMobileEntering === "1") return true;
   const native = nativeSettingsNav(modal);
@@ -1390,8 +1629,18 @@ function enterSettingsMobileDetail(modal) {
   modal.dataset.baMobileEntering = "1";
   native.click();
   let tries = 0;
+  const fail = () => {
+    state.settingsBetterActive = false;
+    state.aboutActive = false;
+    delete modal.dataset.baMobileEntering;
+    modal.classList.remove("ba-better-active", "ba-about-active");
+    scheduleSettingsSync();
+  };
   const check = () => {
-    if (!modal.isConnected) return;
+    if (!modal.isConnected) {
+      fail();
+      return;
+    }
     if (!modal.classList.contains("mobile-menu")) {
       delete modal.dataset.baMobileEntering;
       state.settingsBetterActive = better;
@@ -1400,8 +1649,8 @@ function enterSettingsMobileDetail(modal) {
       return;
     }
     tries += 1;
-    if (tries < 20) window.setTimeout(check, 30);
-    else delete modal.dataset.baMobileEntering;
+    if (tries < 30) window.setTimeout(check, 30);
+    else fail();
   };
   window.setTimeout(check, 20);
   return true;
@@ -1421,6 +1670,9 @@ function ensureAboutNav(modal) {
   nav = source.cloneNode(true);
   nav.classList.remove("active");
   nav.removeAttribute("aria-current");
+  nav.removeAttribute("id");
+  nav.removeAttribute("aria-controls");
+  nav.removeAttribute("aria-describedby");
   nav.removeAttribute("data-ba-settings-nav");
   nav.setAttribute("data-ba-about-nav", "1");
   const icon = nav.querySelector(".ag-set-nav-icon");
@@ -1449,14 +1701,12 @@ function agnostrBuildId() {
   return match ? match[1] : "";
 }
 
-function openProfileByNpub(npub, nickname = "") {
+function openProfileByNpub(npub) {
   const value = String(npub || "").trim();
   if (!value) return;
   const modal = document.querySelector(".ag-settings-modal");
   modal?.querySelector(".ag-sheet-close-btn")?.click();
-  window.setTimeout(async () => {
-    const res = await askPage("inspectPeer", { npub: value, nickname }, 3000);
-    if (res?.ok) return;
+  window.setTimeout(() => {
     try {
       location.hash = `dm=${value}`;
     } catch {}
@@ -1479,7 +1729,7 @@ function openProfileByNpub(npub, nickname = "") {
 
 function aboutPaneHtml() {
   const manifest = api.runtime.getManifest?.() || {};
-  const version = manifest.version || "1.2.2";
+  const version = manifest.version || VERSION;
   const build = agnostrBuildId();
   const appVersion = build ? `web build ${build}` : "web";
   return `<div class="ba-about-pane">
@@ -1525,7 +1775,7 @@ function bindAboutLinks(overlay) {
     if (npub) {
       event.preventDefault();
       event.stopPropagation();
-      openProfileByNpub(npub, "Angel");
+      openProfileByNpub(npub);
       return;
     }
     let url;
@@ -1572,6 +1822,9 @@ function hideAboutPane(modal) {
 }
 
 function ensureThemeCheck(card, active) {
+  // Native theme cards are React-owned. Do not delete their check node; hide it
+  // with CSS while a Better Agnostr theme overrides the native choice.
+  if (!card.hasAttribute("data-ba-glub-theme")) return;
   let check = card.querySelector(".ag-set-theme-check");
   if (active && !check) {
     check = document.createElement("span");
@@ -1627,8 +1880,10 @@ function syncSettingsFields(modal) {
   const status = modal.querySelector("[data-ba-status]");
   if (status) {
     const st = state.status || {};
-    const signer = st.signerHooked ? st.signMode || "hooked" : st.nip07Patched ? "nip-07" : "waiting";
-    status.textContent = `Signer: ${signer} · ${state.events.size} events captured · glub ${effectiveBuild(state.settings) || "build missing"}`;
+    const rewriter = st.nip07Patched
+      ? "NIP-07 pre-sign rewriting active"
+      : "outgoing rewriting unavailable: no NIP-07 provider";
+    status.textContent = `${rewriter} · ${state.events.size} events captured · glub ${effectiveBuild(state.settings) || "build missing"}`;
   }
   const build = modal.querySelector("[data-ba-build-status]");
   if (build) {
@@ -1668,13 +1923,13 @@ function nativePrivacyHtml() {
 }
 
 function injectNativePrivacy(modal) {
-  const stack = modal.querySelector(".ag-set-pane-stack");
+  const stack = modal.querySelector(".ag-set-pane-stack") || modal.querySelector(".ag-set-detail-body");
   if (!stack || stack.querySelector("[data-ba-native='privacy']")) return;
   const holder = document.createElement("div");
   holder.innerHTML = nativePrivacyHtml();
   const group = holder.firstElementChild;
-  const broadcast = [...stack.querySelectorAll(".ag-set-toggle-card")].find((el) =>
-    el.textContent?.includes("Broadcast Agnostr client"),
+  const broadcast = [...stack.querySelectorAll(".ag-set-toggle-card, .ag-set-notif-row")].find((el) =>
+    /broadcast agnostr client|share agnostr client tag/i.test(el.textContent || ""),
   );
   if (broadcast) {
     broadcast.style.display = "none";
@@ -1683,6 +1938,10 @@ function injectNativePrivacy(modal) {
   } else {
     stack.prepend(group);
   }
+}
+
+function clearNativePrivacy(modal) {
+  for (const el of modal.querySelectorAll("[data-ba-native='privacy']")) el.remove();
 }
 
 function soundsSectionHtml() {
@@ -1702,7 +1961,7 @@ function soundsSectionHtml() {
         <span class="ag-set-notif-row-title">${h(title)}</span>
         <span class="ag-set-notif-row-desc">${h(desc)}</span>
       </div>
-      <select class="ag-input ba-set-select ba-notif-select" data-ba-setting="${h(path)}">${optionsHtml(list, value)}</select>
+      <select class="ag-input ba-set-select ba-notif-select" data-ba-setting="${h(path)}" aria-label="${h(title)}">${optionsHtml(list, value)}</select>
     </div>`;
   const rangeRow = (title, desc, path, value) => `
     <div class="ag-set-notif-row">
@@ -1710,7 +1969,7 @@ function soundsSectionHtml() {
         <span class="ag-set-notif-row-title">${h(title)}</span>
         <span class="ag-set-notif-row-desc">${h(desc)}</span>
       </div>
-      <input class="ba-set-range ba-notif-range" type="range" min="0" max="1" step="0.05" data-ba-setting="${h(path)}" value="${h(String(value))}">
+      <input class="ba-set-range ba-notif-range" type="range" min="0" max="1" step="0.05" data-ba-setting="${h(path)}" aria-label="${h(title)}" value="${h(String(value))}">
     </div>`;
   return `<section class="ag-set-section" data-ba-native="sounds">
       <div class="ag-set-section-head">
@@ -1748,18 +2007,23 @@ function soundsSectionHtml() {
 }
 
 function injectNativeSounds(modal) {
-  const stack = modal.querySelector(".ag-set-pane-stack");
+  const stack = modal.querySelector(".ag-set-pane-stack") || modal.querySelector(".ag-set-detail-body");
   if (!stack) return;
-  const nativeChime = [...modal.querySelectorAll(".ag-set-notif-row")].find(
-    (el) => el.querySelector(".ag-set-notif-row-title")?.textContent?.trim() === "Message Chimes",
-  );
+  const nativeChime = [...modal.querySelectorAll(".ag-set-notif-row")].find((el) => {
+    if (el.closest("[data-ba-native]")) return false;
+    const text = `${el.querySelector(".ag-set-notif-row-title")?.textContent || ""} ${el.textContent || ""}`;
+    return /message\s+chimes?|message\s+sounds?/i.test(text);
+  });
   if (nativeChime) {
+    if (nativeChime.dataset.baChimeDisplay === undefined) nativeChime.dataset.baChimeDisplay = nativeChime.style.display;
     nativeChime.style.display = "none";
     nativeChime.setAttribute("data-ba-hidden-native-chime", "1");
   }
   if (stack.querySelector("[data-ba-native='sounds']")) return;
-  const anchor = [...stack.querySelectorAll("section.ag-set-section")].find(
-    (el) => el.querySelector(".ag-set-section-title")?.textContent?.trim() === "Sounds & Lock Screen",
+  const anchor = [...stack.querySelectorAll("section.ag-set-section")].find((el) =>
+    /sounds?\s*(?:&|and)?\s*lock\s*screen|sound\s+effects/i.test(
+      el.querySelector(".ag-set-section-title")?.textContent || "",
+    ),
   );
   const holder = document.createElement("div");
   holder.innerHTML = soundsSectionHtml();
@@ -1769,74 +2033,75 @@ function injectNativeSounds(modal) {
 }
 
 function clearNativeSoundsOverride(modal) {
-  const stack = modal.querySelector(".ag-set-pane-stack");
+  const stack = modal.querySelector(".ag-set-pane-stack") || modal.querySelector(".ag-set-detail-body");
   if (!stack) return;
   for (const el of stack.querySelectorAll("[data-ba-native='sounds'], [data-ba-native='chime-triggers']")) el.remove();
   for (const el of stack.querySelectorAll("[data-ba-hidden-native-chime]")) {
     if (!(el instanceof HTMLElement)) continue;
-    el.style.removeProperty("display");
+    el.style.display = el.dataset.baChimeDisplay || "";
+    delete el.dataset.baChimeDisplay;
     el.removeAttribute("data-ba-hidden-native-chime");
   }
 }
 
+function clearAppearanceExtras(modal) {
+  for (const el of modal.querySelectorAll("[data-ba-hidden-native-audio]")) {
+    if (!(el instanceof HTMLElement)) continue;
+    el.style.display = el.dataset.baAudioDisplay || "";
+    delete el.dataset.baAudioDisplay;
+    el.removeAttribute("data-ba-hidden-native-audio");
+  }
+  for (const group of modal.querySelectorAll("[data-ba-settings-group]")) group.remove();
+}
+
 function injectAppearanceExtras(modal) {
-  const stack = modal.querySelector(".ag-set-pane-stack");
+  const stack = modal.querySelector(".ag-set-pane-stack") || modal.querySelector(".ag-set-detail-body");
   if (!stack) return;
   const audioSection = [...stack.querySelectorAll("section.ag-set-section")].find(
     (el) => el.querySelector(".ag-set-section-title")?.textContent?.trim() === "Audio",
   );
   if (audioSection) {
+    if (audioSection.dataset.baAudioDisplay === undefined) audioSection.dataset.baAudioDisplay = audioSection.style.display;
     audioSection.style.display = "none";
     audioSection.setAttribute("data-ba-hidden-native-audio", "1");
   }
   const agnThemeGrid = [...modal.querySelectorAll(".ag-set-theme-grid")].find((g) => !g.classList.contains("ba-glub-theme-grid"));
-  if (agnThemeGrid) {
-    let themeGroup = stack.querySelector("[data-ba-settings-group='themes']");
-    if (!themeGroup) {
-      const holder = document.createElement("div");
-      holder.innerHTML = glubThemeGroupHtml();
-      themeGroup = holder.firstElementChild;
-      const anchor = agnThemeGrid.closest(".ag-set-group") || agnThemeGrid;
-      anchor.after(themeGroup);
+  const anchor = agnThemeGrid?.closest("section.ag-set-section, .ag-set-group") || null;
+  const holder = document.createElement("div");
+  const ensureGroup = (id, html) => {
+    let group = stack.querySelector(`[data-ba-settings-group='${id}']`);
+    if (!group) {
+      holder.innerHTML = html;
+      group = holder.firstElementChild;
     }
-    let rainbowGroup = stack.querySelector("[data-ba-settings-group='rainbow']");
-    if (!rainbowGroup) {
-      const holder = document.createElement("div");
-      holder.innerHTML = rainbowStyleGroupHtml();
-      rainbowGroup = holder.firstElementChild;
-      themeGroup.after(rainbowGroup);
-    }
-    let interfaceGroup = stack.querySelector("[data-ba-settings-group='interface']");
-    if (!interfaceGroup) {
-      const holder = document.createElement("div");
-      holder.innerHTML = interfaceGroupHtml();
-      interfaceGroup = holder.firstElementChild;
-      rainbowGroup.after(interfaceGroup);
-    }
-    let cssGroup = stack.querySelector("[data-ba-settings-group='css']");
-    if (!cssGroup) {
-      const holder = document.createElement("div");
-      holder.innerHTML = customCssGroupHtml();
-      cssGroup = holder.firstElementChild;
-      interfaceGroup.after(cssGroup);
-    }
-    let fontGroup = stack.querySelector("[data-ba-settings-group='font']");
-    if (!fontGroup) {
-      const holder = document.createElement("div");
-      holder.innerHTML = `<div class="ag-set-group" data-ba-settings-group="font">
+    return group;
+  };
+  const themeGroup = ensureGroup("themes", glubThemeGroupHtml());
+  const rainbowGroup = ensureGroup("rainbow", rainbowStyleGroupHtml());
+  const interfaceGroup = ensureGroup("interface", interfaceGroupHtml());
+  const cssGroup = ensureGroup("css", customCssGroupHtml());
+  const fontGroup = ensureGroup("font", `<div class="ag-set-group" data-ba-settings-group="font">
         <span class="ag-set-label">Font</span>
-        <div class="ba-set-field"><span>Family</span><select class="ag-input ba-set-select" data-ba-setting="font.family">
+        <div class="ba-set-field"><span>Family</span><select class="ag-input ba-set-select" data-ba-setting="font.family" aria-label="Font family">
           ${FONT_PRESETS.map((f) => `<option value="${f.id}"${state.settings.font.family === f.id ? " selected" : ""}>${h(f.label)}</option>`).join("")}
         </select></div>
-        <div class="ba-set-field"><span>Custom family</span><input class="ag-input" data-ba-setting="font.customFamily" maxlength="80" value="${h(state.settings.font.customFamily)}" placeholder="installed family name"></div>
-        <div class="ba-set-field"><span>Custom URL</span><input class="ag-input" data-ba-setting="font.customUrl" maxlength="500" value="${h(state.settings.font.customUrl)}" placeholder="https://…/font.woff2"></div>
+        <div class="ba-set-field"><span>Custom family</span><input class="ag-input" data-ba-setting="font.customFamily" aria-label="Custom font family" maxlength="80" value="${h(state.settings.font.customFamily)}" placeholder="installed family name"></div>
+        <div class="ba-set-field"><span>Custom URL</span><input class="ag-input" data-ba-setting="font.customUrl" aria-label="Custom font URL" maxlength="500" value="${h(state.settings.font.customUrl)}" placeholder="https://…/font.woff2"></div>
         <div class="ba-set-note">IBM Plex, Atkinson Hyperlegible, Lexend, and readable serif families are bundled.</div>
-      </div>`;
-      fontGroup = holder.firstElementChild;
-      cssGroup.after(fontGroup);
-    }
-    syncSettingsFields(modal);
+      </div>`);
+
+  // Keep the groups together and outside React-owned native sections. The old
+  // implementation created every unrelated group only when the native theme grid
+  // existed, and anchored them inside the Color Theme section when it did.
+  const groups = [themeGroup, rainbowGroup, interfaceGroup, cssGroup, fontGroup];
+  let previous = anchor;
+  for (const group of groups) {
+    if (!group) continue;
+    if (previous) previous.after(group);
+    else stack.append(group);
+    previous = group;
   }
+  syncSettingsFields(modal);
 }
 
 function shootStar(el, delay = 0) {
@@ -2016,21 +2281,38 @@ function hideBetterSettingsPane(modal) {
 }
 
 function hideNativeBroadcastClient(modal) {
-  for (const card of modal.querySelectorAll(".ag-set-toggle-card")) {
-    if (!/Broadcast Agnostr client/i.test(card.textContent || "")) continue;
+  for (const card of modal.querySelectorAll(".ag-set-toggle-card, .ag-set-notif-row")) {
+    if (!/broadcast agnostr client|share agnostr client tag/i.test(card.textContent || "")) continue;
     card.style.display = "none";
     card.setAttribute("data-ba-hidden-native-broadcast", "1");
     const input = card.querySelector('input[type="checkbox"]');
-    if (input instanceof HTMLInputElement && input.checked && card.dataset.baBroadcastToggle !== "1") {
-      card.dataset.baBroadcastToggle = "1";
-      input.click();
+    if (input instanceof HTMLInputElement && input.checked) {
+      // The native toggle can be recreated by React. Clicking an already-off
+      // checkbox is harmless, and the click guard prevents a second toggle.
+      if (card.dataset.baBroadcastToggle !== "1") {
+        card.dataset.baBroadcastToggle = "1";
+        input.click();
+      }
     }
   }
 }
 
 function syncSettingsMobileTitle(modal, title) {
   const section = modal.querySelector(".ag-set-mobile-section");
-  if (section && title && section.textContent !== title) section.textContent = title;
+  if (!section || !title) return;
+  const label = section.querySelector(".ag-set-mobile-title");
+  if (label) {
+    if (label.textContent !== title) label.textContent = title;
+  } else {
+    const textNode = [...section.childNodes].find(
+      (node) => node.nodeType === Node.TEXT_NODE && (node.nodeValue || "").trim(),
+    );
+    if (textNode) textNode.nodeValue = title;
+    else if (!section.children.length) section.textContent = title;
+    else section.setAttribute("aria-label", title);
+  }
+  const back = modal.querySelector(".ag-set-mobile-back, .ag-sheet-back-btn, [data-close-modal]");
+  back?.setAttribute("aria-label", `Back from ${title}`);
 }
 
 function settingsModalTitle(modal) {
@@ -2063,10 +2345,17 @@ function syncSettingsIntegration() {
     // The new Alerts shortcut opens the Notifications pane as a direct detail
     // sheet with no nav list. Treat it exactly like the Settings → Notifications
     // pane so the Better Agnostr sound controls appear inline there too.
+    state.settingsBetterActive = false;
+    state.aboutActive = false;
+    modal.classList.remove("ba-better-active", "ba-about-active");
+    hideBetterSettingsPane(modal);
+    hideAboutPane(modal);
     const title = settingsModalTitle(modal);
-    if (title === "Appearance") injectAppearanceExtras(modal);
-    else if (title === "Privacy & Trust") injectNativePrivacy(modal);
-    else if (title === "Notifications") injectNativeSounds(modal);
+    if (/appearance/i.test(title)) injectAppearanceExtras(modal);
+    else clearAppearanceExtras(modal);
+    if (/privacy|trust/i.test(title)) injectNativePrivacy(modal);
+    else clearNativePrivacy(modal);
+    if (/notif|alert/i.test(title)) injectNativeSounds(modal);
     else clearNativeSoundsOverride(modal);
     syncThemeCards(modal);
     return;
@@ -2095,9 +2384,11 @@ function syncSettingsIntegration() {
   hideAboutPane(modal);
   const title = settingsModalTitle(modal);
   syncSettingsMobileTitle(modal, title);
-  if (title === "Appearance") injectAppearanceExtras(modal);
-  else if (title === "Privacy & Trust") injectNativePrivacy(modal);
-  else if (title === "Notifications") injectNativeSounds(modal);
+  if (/appearance/i.test(title)) injectAppearanceExtras(modal);
+  else clearAppearanceExtras(modal);
+  if (/privacy|trust/i.test(title)) injectNativePrivacy(modal);
+  else clearNativePrivacy(modal);
+  if (/notif|alert/i.test(title)) injectNativeSounds(modal);
   else clearNativeSoundsOverride(modal);
   syncThemeCards(modal);
 }
@@ -2170,6 +2461,7 @@ function handleSettingsAction(action) {
 document.addEventListener(
   "click",
   (event) => {
+    if (!state.enabledReady || state.settings.enabled === false) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     const suiteBetter = target.closest("[data-ba-suite-better]");
@@ -2318,7 +2610,7 @@ document.addEventListener(
     if (angel) {
       event.preventDefault();
       event.stopPropagation();
-      openProfileByNpub(angel.getAttribute("data-npub"), "Angel");
+      openProfileByNpub(angel.getAttribute("data-npub"));
       return;
     }
     const action = target.closest("[data-ba-settings-action]")?.getAttribute("data-ba-settings-action");
@@ -2349,6 +2641,7 @@ document.addEventListener(
 document.addEventListener(
   "input",
   (event) => {
+    if (!state.enabledReady || state.settings.enabled === false) return;
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     const path = target.getAttribute("data-ba-setting");
@@ -2377,6 +2670,7 @@ document.addEventListener(
 document.addEventListener(
   "change",
   (event) => {
+    if (!state.enabledReady || state.settings.enabled === false) return;
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     if (target.matches("[data-ba-strip-tag]")) {
@@ -2526,8 +2820,13 @@ function wireShell() {
     const viewerTab = target.closest("[data-viewer-tab]");
     if (viewerTab) {
       if (state.viewer) {
-        state.viewer.tab = viewerTab.getAttribute("data-viewer-tab");
+        const tab = viewerTab.getAttribute("data-viewer-tab");
+        state.viewer.tab = tab;
         renderViewer();
+        window.requestAnimationFrame(() => {
+          const next = state.shadow?.querySelector(`[data-viewer-tab='${tab}']`);
+          if (next instanceof HTMLElement) next.focus({ preventScroll: true });
+        });
       }
       return;
     }
@@ -2596,11 +2895,9 @@ function wireShell() {
     if (target.matches("[data-review-tag]")) {
       if (!state.review) return;
       const index = Number(target.getAttribute("data-review-tag"));
-      const tag = state.review.payload?.proposed?.tags?.[index];
-      const name = tag?.[0];
-      if (!name) return;
-      if (target.checked) state.review.selected.add(name);
-      else state.review.selected.delete(name);
+      if (!Number.isInteger(index)) return;
+      if (target.checked) state.review.selected.add(index);
+      else state.review.selected.delete(index);
       return;
     }
     if (target.matches("[data-strip-tag]")) {
@@ -2623,15 +2920,18 @@ function wireShell() {
     }
   });
 
-  root.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      if (state.review) finishReview("cancel");
-      else if (state.customAction) closeActionModal();
-      else if (state.viewer) closeViewer();
-      else closePanel();
-    }
-  });
 }
+
+document.addEventListener(
+  "keydown",
+  (event) => {
+    if (trapModalKey(event)) return;
+    if (event.key === "Escape" && !state.modalOpen && state.settings.ui.panelOpen) {
+      closePanel();
+    }
+  },
+  true,
+);
 
 function handleAction(action) {
   switch (action) {
@@ -2679,9 +2979,10 @@ function handleAction(action) {
       break;
     case "verify-event":
       if (state.viewer?.event) {
-        askPage("verify", { event: state.viewer.event }).then((res) => {
-          if (res) {
-            state.verified.set(state.viewer.event.id, res);
+        const target = state.viewer.event;
+        askPage("verify", { event: target }).then((res) => {
+          if (res && state.viewer?.event?.id === target.id) {
+            state.verified.set(target.id, res);
             renderViewer();
           }
         });
@@ -2945,13 +3246,26 @@ function templateInput() {
   return state.shadow?.querySelector("[data-setting='studio.template']") || null;
 }
 
-function composerTextarea() {
-  return document.querySelector(".ag-composer-input");
+function composerTextarea(scope = null) {
+  const root = scope?.closest?.(".ag-composer-dock") || scope?.closest?.(".ag-composer") || document;
+  let list = [...root.querySelectorAll(".ag-composer-input")];
+  if (!list.length && root !== document) list = [...document.querySelectorAll(".ag-composer-input")];
+  const active = document.activeElement;
+  return (
+    list.find((el) => el === active) ||
+    list.find((el) => el instanceof HTMLTextAreaElement && !el.disabled && !el.readOnly && el.offsetParent !== null) ||
+    list[0] ||
+    null
+  );
 }
 
 function insertInto(input, text) {
   if (!input) {
     toast("warning", "No target field", "Open a chat composer or the line-format field first.");
+    return;
+  }
+  if ((input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) && (input.disabled || input.readOnly)) {
+    toast("warning", "Field is read-only", "This field cannot be edited right now.");
     return;
   }
   if (input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) {
@@ -3065,7 +3379,7 @@ function renderClientPreview() {
   const policies = state.settings.client.policies;
   const meta = {
     rich: "",
-    fmt: state.settings.studio.enabled ? state.settings.studio.template : "",
+    fmt: state.settings.studio.enabled ? normalizeTemplate(state.settings.studio.template) : "",
     flair: state.settings.studio.enabled ? state.settings.studio.flair : "",
   };
   const sample = {
@@ -3114,9 +3428,7 @@ function syncFooter() {
   const status = state.status || {};
   const signer = root.querySelector("[data-role='foot-signer']");
   if (signer) {
-    if (status.signerHooked) signer.textContent = `signer: ${status.signMode || "hooked"}`;
-    else if (status.nip07Patched) signer.textContent = "signer: nip-07";
-    else signer.textContent = "signer: waiting";
+    signer.textContent = status.nip07Patched ? "rewriter: nip-07" : "rewriter: waiting";
   }
   const build = root.querySelector("[data-role='foot-build']");
   if (build) {
@@ -3128,16 +3440,15 @@ function syncFooter() {
   const sub = root.querySelector("[data-role='header-sub']");
   if (sub) {
     const parts = [];
-    if (status.signMode) parts.push(status.signMode);
-    parts.push(status.signerHooked ? "signer linked" : "signer waiting");
+    parts.push(status.nip07Patched ? "NIP-07 rewriter" : "rewriter waiting");
     if (b()) parts.push(`glub ${b().slice(0, 7)}`);
     sub.textContent = parts.join(" · ");
   }
   const dot = root.querySelector("[data-role='header-dot']");
   if (dot) {
     dot.className = "ba-status-dot";
-    if (status.signerHooked && b()) dot.classList.add("ok");
-    else if (status.signerHooked || b()) dot.classList.add("warn");
+    if (status.nip07Patched && b()) dot.classList.add("ok");
+    else if (status.nip07Patched || b()) dot.classList.add("warn");
     else dot.classList.add("err");
   }
 }
@@ -3206,7 +3517,13 @@ function mapBetterTab(tab) {
 }
 
 function findNativeSettingsButton() {
-  const candidates = [...document.querySelectorAll("button")].filter(
+  const roots = [
+    ...document.querySelectorAll(".ag-app-rail, .ag-suite-popover, .ag-suite-footer, .ag-header, header"),
+  ];
+  const scoped = roots.length
+    ? roots.flatMap((root) => [...root.querySelectorAll("button")])
+    : [...document.querySelectorAll("button")];
+  const candidates = [...new Set(scoped)].filter(
     (b) =>
       !b.closest(".ba-composer-bar") &&
       !b.hasAttribute("data-ba-suite-better") &&
@@ -3302,9 +3619,9 @@ function renderRelay() {
         : `<span class="ba-relay-pill">no sockets observed yet</span>`;
   }
   if (info) {
-    const signer = status.signerHooked ? `${status.signMode || "hooked"}` : status.nip07Patched ? "nip-07" : "waiting";
+    const rewriter = status.nip07Patched ? "nip-07" : "waiting";
     info.innerHTML = `
-      <div class="ba-kv"><span>signer</span><span>${h(signer)}</span></div>
+      <div class="ba-kv"><span>rewriter</span><span>${h(rewriter)}</span></div>
       <div class="ba-kv"><span>pubkey</span><span>${h(short(status.pubkey || "", 18))}</span></div>
       <div class="ba-kv"><span>sockets</span><span>${h(String(status.socketCount || 0))}</span></div>
       <div class="ba-kv"><span>events captured</span><span>${h(String(state.events.size))}</span></div>
@@ -3343,6 +3660,7 @@ function renderRelay() {
 // ---------------------------------------------------------------------------
 
 function scheduleEnhance(force = false) {
+  if (!state.enabledReady || state.settings.enabled === false) return;
   if (!force && document.hidden) {
     state.enhancePending = true;
     return;
@@ -3354,51 +3672,110 @@ function scheduleEnhance(force = false) {
   }, 120);
 }
 
+const CHAT_LABEL_MAP = new Map([
+  ["bitchat", "Chat"],
+  ["bitchat channels", "Chat channels"],
+  ["open bitchat globe", "Open Chat globe"],
+  ["close bitchat channels", "Close Chat channels"],
+  ["bitchat globe", "Chat globe"],
+  ["bitchat room", "Chat room"],
+  ["bitchat rooms", "Chat rooms"],
+  ["open bitchat", "Open Chat"],
+  ["close bitchat", "Close Chat"],
+]);
+const CHAT_LABEL_ROOTS = [
+  ".ag-app-rail",
+  ".ag-mobile-tabbar",
+  ".ag-conv-header",
+  ".ag-header",
+  ".ag-bitchat-drawer",
+  ".ag-bitchat-quickbar",
+  ".ag-bitchat-globe-stage",
+  ".ag-suite-popover",
+  ".ag-suite-footer",
+  ".ag-settings-modal",
+  ".ag-peer-modal",
+  ".ag-sheet",
+  ".ag-quick-profile-popover",
+  ".ag-ctx-menu",
+].join(",");
+const CHAT_LABEL_SELECTOR = [
+  "button",
+  "[role='button']",
+  "[role='tab']",
+  ".ag-set-label",
+  ".ag-set-nav-label",
+  ".ag-set-nav-sub",
+  ".ag-set-section-title",
+  ".ag-set-detail-title",
+  ".ag-set-mobile-title",
+  ".ag-suite-card-name",
+  ".ag-rail-app-tile",
+  ".ag-mtab-btn",
+  "[aria-label]",
+  "[title]",
+  "[placeholder]",
+].join(",");
+
+function chatLabel(value) {
+  return CHAT_LABEL_MAP.get(String(value || "").trim().toLowerCase()) || "";
+}
+
+// This is intentionally a label map, not a global text replacement. It only
+// touches recognized UI controls/attributes, never message content, and it does
+// not run on a timer. New nodes are picked up by the normal enhance pass.
 function replaceBitchatText() {
-  if (!document.body) return;
-  const now = Date.now();
-  if (now - (state.lastBitchatReplace || 0) < 2000) return;
-  state.lastBitchatReplace = now;
+  if (!state.enabledReady || state.settings.enabled === false || !document.body) return;
   const blocked = ".ag-msg-rich, .ag-msg-content, .ag-chat-row-preview, .ag-msg-preview, .ag-conv-preview, .ag-composer, textarea, input, pre, code, script, style";
-  const attrSelector = '[title*="bitchat" i], [aria-label*="bitchat" i], [placeholder*="bitchat" i]';
-  const roots = document.querySelectorAll(
-    ".ag-app-rail, .ag-suite-popover, .ag-header, .ag-conv-header, .ag-srv-discord-pane, .ag-mobile-tabbar, .ag-settings-modal, .ag-peer-modal, .ag-sheet, .ag-quick-profile-popover, .ag-ctx-menu",
-  );
-  for (const root of roots) {
-    if (!(root instanceof HTMLElement)) continue;
-    if (!/bitchat/i.test(root.textContent || "") && !root.querySelector(attrSelector)) continue;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        const parent = node.parentElement;
-        if (!parent) return NodeFilter.FILTER_REJECT;
-        if (parent.closest(blocked)) return NodeFilter.FILTER_REJECT;
-        return /bitchat/i.test(node.nodeValue || "") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-      },
-    });
-    const nodes = [];
-    let guard = 0;
-    while (walker.nextNode() && guard++ < 3000) nodes.push(walker.currentNode);
-    for (const node of nodes) node.nodeValue = (node.nodeValue || "").replace(/bitchat/gi, "Chat");
-    for (const el of root.querySelectorAll(attrSelector)) {
-      if (el.closest(blocked)) continue;
-      for (const attr of ["title", "aria-label", "placeholder"]) {
+  for (const root of document.querySelectorAll(CHAT_LABEL_ROOTS)) {
+    for (const el of root.querySelectorAll(CHAT_LABEL_SELECTOR)) {
+      if (!(el instanceof HTMLElement) || el.closest(blocked)) continue;
+      for (const attr of ["aria-label", "title", "placeholder"]) {
         const value = el.getAttribute(attr);
-        if (value && /bitchat/i.test(value)) el.setAttribute(attr, value.replace(/bitchat/gi, "Chat"));
+        if (!value) continue;
+        const mapped = chatLabel(value);
+        if (mapped) el.setAttribute(attr, mapped);
+      }
+      if (el.matches("input, textarea, select")) continue;
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      for (const node of nodes) {
+        const value = node.nodeValue || "";
+        const trimmed = value.trim();
+        const mapped = chatLabel(trimmed);
+        if (!mapped) continue;
+        const start = value.indexOf(trimmed);
+        node.nodeValue = `${value.slice(0, start)}${mapped}${value.slice(start + trimmed.length)}`;
       }
     }
   }
-  if (/bitchat/i.test(document.title)) document.title = document.title.replace(/bitchat/gi, "Chat");
+  if (/\bbitchat\b/i.test(document.title)) {
+    document.title = document.title.replace(/\bbitchat\b/gi, "Chat");
+  }
 }
 
 function maintainCallControls() {
+  if (!state.enabledReady || state.settings.enabled === false) return;
   const now = Date.now();
-  if (now - (state.lastCallMaintenance || 0) < 2000) return;
+  const elapsed = now - (state.lastCallMaintenance || 0);
+  if (elapsed < 2000) {
+    if (state.callMaintenanceTimer === null) {
+      state.callMaintenanceTimer = window.setTimeout(() => {
+        state.callMaintenanceTimer = null;
+        maintainCallControls();
+      }, 2000 - elapsed + 20);
+    }
+    return;
+  }
   state.lastCallMaintenance = now;
   applyCallButtons();
   hideCallUi();
+  markLocateButtons();
 }
 
 function enhanceAll() {
+  if (!state.enabledReady || state.settings.enabled === false) return;
   if (!document.body) return;
   if (document.hidden) {
     state.enhancePending = true;
@@ -3419,6 +3796,7 @@ function enhanceAll() {
     ensureToolbars();
     ensureComposerEmoji();
     decorateRows();
+    cleanupRichObservers();
     enhanceContextMenu();
     markBetterClients();
     hideSelfTeleportBadges();
@@ -3440,9 +3818,26 @@ function isGroupChatView() {
 
 function returnToPublicChat() {
   const railChat = document.querySelector(".ag-rail-bitchat");
-  if (!(railChat instanceof HTMLElement)) return false;
-  railChat.click();
-  return true;
+  if (railChat instanceof HTMLElement) {
+    railChat.click();
+    return true;
+  }
+  const mobile = [...document.querySelectorAll(".ag-mtab-btn, .ag-mobile-tabbar button")].find((el) =>
+    /(^|\s)chat(\s|$)/i.test(`${el.textContent || ""} ${el.getAttribute("aria-label") || ""}`) ||
+    !!el.querySelector('svg[class*="lucide-waves"]'),
+  );
+  if (mobile instanceof HTMLElement) {
+    mobile.click();
+    return true;
+  }
+  const card = [...document.querySelectorAll(".ag-suite-card")].find((el) =>
+    /chat/i.test(el.querySelector(".ag-suite-card-name")?.textContent || ""),
+  );
+  if (card instanceof HTMLElement) {
+    card.click();
+    return true;
+  }
+  return false;
 }
 
 function ensureSuiteBetter() {
@@ -3503,6 +3898,8 @@ function emojiPicker() {
     pop = document.createElement("div");
     pop.className = "ba-emoji-popover";
     pop.setAttribute("data-ba-emoji-picker", "1");
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "Emoji picker");
     pop.hidden = true;
     document.body.appendChild(pop);
   }
@@ -3516,6 +3913,8 @@ function emojiPicker() {
 function hideEmojiPicker() {
   const pop = document.querySelector(".ba-emoji-popover");
   if (pop) pop.hidden = true;
+  if (state.emojiAnchor instanceof HTMLElement) state.emojiAnchor.setAttribute("aria-expanded", "false");
+  state.emojiAnchor = null;
 }
 
 function positionEmojiPicker(anchor) {
@@ -3523,11 +3922,15 @@ function positionEmojiPicker(anchor) {
   pop.hidden = false;
   const rect = anchor.getBoundingClientRect();
   const box = pop.getBoundingClientRect();
+  const viewport = window.visualViewport;
+  const width = viewport?.width || window.innerWidth;
+  const height = viewport?.height || window.innerHeight;
+  const offsetTop = viewport?.offsetTop || 0;
   const margin = 10;
-  let left = Math.min(rect.left, window.innerWidth - box.width - margin);
+  let left = Math.min(rect.left, width - box.width - margin);
   left = Math.max(margin, left);
   let top = rect.bottom + 7;
-  if (top + box.height > window.innerHeight - margin) top = Math.max(margin, rect.top - box.height - 7);
+  if (top + box.height > height - margin) top = Math.max(margin + offsetTop, rect.top - box.height - 7);
   pop.style.left = `${Math.round(left)}px`;
   pop.style.top = `${Math.round(top)}px`;
 }
@@ -3543,7 +3946,10 @@ function openEmojiPicker(anchor) {
     }
   }
   state.emojiAnchor = anchor;
+  anchor.setAttribute("aria-expanded", "true");
   positionEmojiPicker(anchor);
+  const first = pop.querySelector(".ba-emoji-tab.is-active, .ba-emoji-item");
+  if (first instanceof HTMLElement) first.focus({ preventScroll: true });
 }
 
 function insertEmoji(emoji) {
@@ -3559,9 +3965,10 @@ function ensureComposerEmoji() {
     button.className = "ag-composer-icon-btn ba-emoji-btn";
     button.setAttribute("data-ba-emoji-trigger", "composer");
     button.setAttribute("aria-label", "Insert emoji");
+    button.setAttribute("aria-expanded", "false");
     button.title = "Insert emoji";
     button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg>';
-    const voice = right.querySelector('button[aria-label="Record voice memo"], button[title="Record voice memo"]');
+    const voice = right.querySelector('button[aria-label*="voice memo" i], button[title*="voice memo" i]');
     if (voice) voice.before(button);
     else right.prepend(button);
   }
@@ -3570,10 +3977,43 @@ function ensureComposerEmoji() {
 function applyVoiceMemoVisibility() {
   const remove = state.settings.privacy.removeVoiceMemo !== false;
   for (const btn of document.querySelectorAll(
-    'button[aria-label="Record voice memo"], button[title="Record voice memo"]',
+    '.ag-composer-dock button[aria-label*="voice memo" i], .ag-composer-dock button[title*="voice memo" i]',
   )) {
-    btn.style.display = remove ? "none" : "";
+    if (!(btn instanceof HTMLElement)) continue;
+    if (remove) {
+      if (btn.dataset.baVoiceHidden !== "1") {
+        btn.dataset.baVoiceDisplay = btn.style.display;
+        btn.dataset.baVoiceHidden = "1";
+      }
+      btn.style.display = "none";
+    } else if (btn.dataset.baVoiceHidden === "1") {
+      btn.style.display = btn.dataset.baVoiceDisplay || "";
+      delete btn.dataset.baVoiceHidden;
+      delete btn.dataset.baVoiceDisplay;
+    }
   }
+}
+
+function composerToolbarHtml() {
+  const colorButtons = Object.entries(COLORS)
+    .map(
+      ([code, value]) =>
+        `<button type="button" data-color="${code}" title="&amp;${code} · ${COLOR_NAMES[code]}" aria-label="${h(COLOR_NAMES[code])}" style="background:${value}"></button>`,
+    )
+    .join("");
+  return `
+    <button type="button" class="ba-composer-toggle" data-ba-format-toggle="1" title="Formatting" aria-label="Toggle formatting bar" aria-expanded="false">Aa</button>
+    <div class="ba-composer-bar" role="toolbar" aria-label="Message formatting">
+      <button type="button" data-code="&l" title="Bold" aria-label="Bold">B</button>
+      <button type="button" data-code="&o" title="Italic" aria-label="Italic" style="font-style:italic">I</button>
+      <button type="button" data-code="&n" title="Underline" aria-label="Underline" style="text-decoration:underline">U</button>
+      <button type="button" data-code="&m" title="Strikethrough" aria-label="Strikethrough" style="text-decoration:line-through">S</button>
+      <button type="button" data-code="&k" title="Obfuscate" aria-label="Obfuscate">K</button>
+      <button type="button" data-code="&g" title="Rainbow" aria-label="Rainbow">G</button>
+      <button type="button" data-code="&r" title="Reset" aria-label="Reset formatting">R</button>
+      <button type="button" class="ba-color-toggle" data-action="toggle-colors" title="Colors" aria-label="Colors" aria-expanded="false"></button>
+      <div class="ba-color-popover" hidden>${colorButtons}</div>
+    </div>`;
 }
 
 function ensureToolbars() {
@@ -3581,36 +4021,25 @@ function ensureToolbars() {
   for (const dock of document.querySelectorAll(".ag-composer-dock")) {
     for (const old of dock.querySelectorAll(":scope > .ba-composer-bar")) old.remove();
     let head = dock.querySelector(":scope > .ba-composer-head");
-    if (!head) {
-      head = document.createElement("div");
-      head.className = "ba-composer-head";
-      head.innerHTML = `
-        <button type="button" class="ba-composer-toggle" data-ba-format-toggle="1" title="Formatting" aria-label="Toggle formatting bar">Aa</button>
-        <div class="ba-composer-bar">
-          <button type="button" data-code="&l" title="Bold">B</button>
-          <button type="button" data-code="&o" title="Italic" style="font-style:italic">I</button>
-          <button type="button" data-code="&n" title="Underline" style="text-decoration:underline">U</button>
-          <button type="button" data-code="&m" title="Strikethrough" style="text-decoration:line-through">S</button>
-          <button type="button" data-code="&k" title="Obfuscate">K</button>
-          <button type="button" data-code="&g" title="Rainbow">G</button>
-          <button type="button" data-code="&r" title="Reset">R</button>
-          <button type="button" class="ba-color-toggle" data-action="toggle-colors" title="Colors" aria-label="Colors"></button>
-          <div class="ba-color-popover" hidden>
-            ${Object.entries(COLORS)
-              .map(
-                ([code, value]) =>
-                  `<button type="button" data-color="${code}" title="&amp;${code} · ${COLOR_NAMES[code]}" style="background:${value}"></button>`,
-              )
-              .join("")}
-          </div>
-        </div>`;
-      head.addEventListener("mousedown", (event) => {
-        if (event.target.closest("button")) event.preventDefault();
-      });
-      dock.prepend(head);
+    if (!head || !head.querySelector(".ba-composer-bar")) {
+      if (!head) {
+        head = document.createElement("div");
+        head.className = "ba-composer-head";
+      }
+      head.innerHTML = composerToolbarHtml();
+      if (head.dataset.baWired !== "1") {
+        head.dataset.baWired = "1";
+        head.addEventListener("mousedown", (event) => {
+          if (event.target.closest("button")) event.preventDefault();
+        });
+      }
+      if (!head.isConnected) dock.prepend(head);
     }
     const bar = head.querySelector(".ba-composer-bar");
-    if (bar) bar.hidden = state.settings.studio.showComposerToolbar === false;
+    const hidden = state.settings.studio.showComposerToolbar === false;
+    if (bar) bar.hidden = hidden;
+    const toggle = head.querySelector("[data-ba-format-toggle]");
+    if (toggle) toggle.setAttribute("aria-expanded", hidden ? "false" : "true");
   }
 }
 
@@ -3620,10 +4049,28 @@ function ensureToolbars() {
 // which leaves a visible flash of unformatted text. Repair the one affected row
 // synchronously from the mutation observer instead, before the next paint.
 function rowDecorationIntact(row, ev) {
+  if (row.dataset.baFlairSuppressed) {
+    const suppressed = row.dataset.baFlairSuppressed;
+    const limit = flairLimit(suppressed);
+    if (limit > 0 && document.querySelectorAll(`.ag-msg-row.flair-${suppressed}`).length < limit) {
+      delete row.dataset.baFlairSuppressed;
+      return false;
+    }
+    return true;
+  }
   if (!row.querySelector(".ba-json-btn, .ba-row-json-btn")) return false;
   if (row.dataset.baFlair) {
     if (!row.classList.contains("flair")) return false;
+    if (!row.classList.contains(`flair-${row.dataset.baFlair}`)) return false;
     if (!row.querySelector(":scope > .ba-flair-layer")) return false;
+    try {
+      const expected = JSON.parse(row.dataset.baFlairVars || "{}");
+      for (const [key, value] of Object.entries(expected)) {
+        if (row.style.getPropertyValue(key) !== String(value)) return false;
+      }
+    } catch {
+      return false;
+    }
   }
   const rich = row.querySelector(".ag-msg-rich");
   const author = row.querySelector(".ag-msg-author");
@@ -3638,6 +4085,16 @@ function rowDecorationIntact(row, ev) {
   const expectedBetter = isBetterClient(ev) || (ownMessage && ownBetterClient());
   if (author && expectedBetter && !author.classList.contains("ba-better-name")) return false;
   if (row.dataset.baRichId && (!rich || rich.dataset.baRich !== row.dataset.baRichId)) return false;
+  try {
+    const expectedVars = JSON.parse(row.dataset.baLineVars || "{}");
+    for (const vars of Object.values(expectedVars)) {
+      for (const [key, value] of Object.entries(vars || {})) {
+        if (row.style.getPropertyValue(key) !== value) return false;
+      }
+    }
+  } catch {
+    return false;
+  }
   return true;
 }
 
@@ -3734,7 +4191,8 @@ function isBetterClient(ev) {
 function ownBetterClient() {
   return (
     state.settings.client.name.trim().toLowerCase() === "betteragnostr" &&
-    state.settings.client.policies.chat === "spoof"
+    state.settings.client.policies.chat === "spoof" &&
+    state.status?.nip07Patched !== false
   );
 }
 
@@ -3782,12 +4240,17 @@ function clientPillDisplay(raw) {
   if (/^betteragnostr$|^better-agnostr$|^better agnostr$/i.test(name)) {
     return { text: "BetterAgnostr", cls: "ba-client-pill-ba" };
   }
-  return { text: name === lower ? `${name.charAt(0).toUpperCase()}${name.slice(1)}` : name, cls: "ba-client-pill-unknown" };
+  const safe = name.length > 32 ? `${name.slice(0, 31)}…` : name;
+  return { text: safe === lower ? `${safe.charAt(0).toUpperCase()}${safe.slice(1)}` : safe, cls: "ba-client-pill-unknown" };
 }
 
 function syncPeerClientPill(modal) {
   const pill = modal.querySelector(".ag-peer-client-pill");
-  if (!(pill instanceof HTMLElement)) return;
+  const clientRow = [...modal.querySelectorAll(".ag-key-row")].find(
+    (row) => row.querySelector(".ag-key-label")?.textContent?.trim().toUpperCase() === "CLIENT",
+  );
+  const fallback = !pill ? clientRow?.querySelector(".ag-key-value") : null;
+  if (!(pill instanceof HTMLElement) && !(fallback instanceof HTMLElement)) return;
   const hexRow = [...modal.querySelectorAll(".ag-key-row")].find(
     (row) => row.querySelector(".ag-key-label")?.textContent?.trim().toUpperCase() === "HEX PUBKEY",
   );
@@ -3795,23 +4258,49 @@ function syncPeerClientPill(modal) {
   if (!pubkey) return;
   const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
   let client = state.peerClients.get(pubkey);
-  if (!client && pubkey === ownPubkey && state.settings.client.policies.chat === "spoof" && state.settings.client.name) {
+  if (
+    !client &&
+    pubkey === ownPubkey &&
+    state.status?.nip07Patched !== false &&
+    state.settings.client.policies.chat === "spoof" &&
+    state.settings.client.name
+  ) {
     client = { name: state.settings.client.name, at: Date.now() };
   }
   if (!client) return;
   const display = clientPillDisplay(client.name);
   if (!display) return;
-  pill.textContent = display.text;
-  for (const cls of [...pill.classList]) {
-    if (cls.startsWith("ag-client-pill-") || cls.startsWith("ba-client-pill-")) pill.classList.remove(cls);
+  const target = pill instanceof HTMLElement ? pill : fallback;
+  if (!(target instanceof HTMLElement)) return;
+  if (pill instanceof HTMLElement) {
+    pill.textContent = display.text;
+    pill.title = display.text;
+    pill.setAttribute("aria-label", `Client: ${display.text}`);
+    for (const cls of [...pill.classList]) {
+      if (cls.startsWith("ag-client-pill-") || cls.startsWith("ba-client-pill-")) pill.classList.remove(cls);
+    }
+    pill.classList.add(display.cls);
+    pill.dataset.baClientPill = "1";
+  } else if (target.children.length === 0) {
+    target.textContent = display.text;
+    target.title = display.text;
+    target.dataset.baClientPill = "1";
   }
-  pill.classList.add(display.cls);
-  pill.dataset.baClientPill = "1";
 }
 
 function markBetterClients() {
+  if (!state.enabledReady || state.settings.enabled === false) return;
   const now = Date.now();
-  if (now - (state.lastBetterClients || 0) < 500) return;
+  const elapsed = now - (state.lastBetterClients || 0);
+  if (elapsed < 500) {
+    if (state.betterClientsTimer === null) {
+      state.betterClientsTimer = window.setTimeout(() => {
+        state.betterClientsTimer = null;
+        markBetterClients();
+      }, 500 - elapsed + 20);
+    }
+    return;
+  }
   state.lastBetterClients = now;
   const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
   const ownBetter = ownBetterClient();
@@ -3958,7 +4447,7 @@ function protectRainbowEmojis(el, enabled) {
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const value = node.nodeValue || "";
-      if (!value || node.parentElement?.closest(".fmtEmoji")) return NodeFilter.FILTER_REJECT;
+      if (!value || node.parentElement?.closest(".fmtEmoji, pre, code, textarea, input, script, style")) return NodeFilter.FILTER_REJECT;
       EMOJI_DOM_RE.lastIndex = 0;
       return EMOJI_DOM_RE.test(value) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },
@@ -4029,15 +4518,29 @@ function applyLineClasses(el, prefix, vis, row) {
   if (vis?.obf) activeLineClasses.push("fmtObf");
   if (activeLineClasses.length) el.dataset.baLineClasses = activeLineClasses.join(" ");
   else delete el.dataset.baLineClasses;
-  if (!vis) return;
   const ns = prefix === "ba-line-name" ? "name" : "msg";
-  if (vis.color) row.style.setProperty(`--ba-line-${ns}-color`, vis.color);
-  else row.style.removeProperty(`--ba-line-${ns}-color`);
-  if (vis.underline || vis.strike) {
+  const vars = {};
+  if (vis?.color) {
+    row.style.setProperty(`--ba-line-${ns}-color`, vis.color);
+    vars[`--ba-line-${ns}-color`] = vis.color;
+  } else {
+    row.style.removeProperty(`--ba-line-${ns}-color`);
+  }
+  if (vis?.underline || vis?.strike) {
     const deco = [vis.underline ? "underline" : "", vis.strike ? "line-through" : ""].filter(Boolean).join(" ");
     row.style.setProperty(`--ba-line-${ns}-deco`, deco);
+    vars[`--ba-line-${ns}-deco`] = deco;
   } else {
     row.style.removeProperty(`--ba-line-${ns}-deco`);
+  }
+  try {
+    const all = JSON.parse(row.dataset.baLineVars || "{}");
+    if (Object.keys(vars).length) all[ns] = vars;
+    else delete all[ns];
+    if (Object.keys(all).length) row.dataset.baLineVars = JSON.stringify(all);
+    else delete row.dataset.baLineVars;
+  } catch {
+    delete row.dataset.baLineVars;
   }
 }
 
@@ -4060,6 +4563,7 @@ function clearFlair(row) {
   row.querySelectorAll(":scope > .ba-flair-layer, :scope > .flairFx, :scope > .flairScan, :scope > .ba-flair-fx").forEach((n) => n.remove());
   row.removeAttribute("data-ba-flair");
   row.removeAttribute("data-flair");
+  delete row.dataset.baFlairVars;
 }
 
 function flairStyleVars(vars) {
@@ -4069,24 +4573,43 @@ function flairStyleVars(vars) {
 }
 
 function applyFlair(row, ev, flair) {
-  if (!isValidFlair(flair)) {
+  flair = flairName(flair);
+  if (!flair) {
     clearFlair(row);
     return;
   }
   const classes = flairClass(flair).split(" ").filter(Boolean);
+  const limit = flairLimit(flair);
+  if (limit > 0 && !row.classList.contains(`flair-${flair}`)) {
+    const active = document.querySelectorAll(`.ag-msg-row.flair-${flair}`).length;
+    if (active >= limit) {
+      clearFlair(row);
+      row.dataset.baFlairSuppressed = flair;
+      return;
+    }
+    delete row.dataset.baFlairSuppressed;
+  }
   const layer = row.querySelector(":scope > .ba-flair-layer");
   const hasFx = !flairHasFx(flair) || !!layer?.querySelector(":scope > .flairFx");
   const hasScan = !flairOverlayInner(flair) || !!layer?.querySelector(":scope > .flairScan");
-  const vars = flairVars(flair);
-  const hasVars = Object.keys(vars).every((k) => row.style.getPropertyValue(k));
   const hasClasses = classes.every((cls) => row.classList.contains(cls));
   const quiet = !!state.settings.studio.reduceMotion;
+  let hasVars = false;
+  try {
+    const saved = JSON.parse(row.dataset.baFlairVars || "{}");
+    const entries = Object.entries(saved);
+    hasVars = entries.length === 0
+      ? row.dataset.baFlairVars === "{}"
+      : entries.every(([k, v]) => row.style.getPropertyValue(k) === String(v));
+  } catch {}
   if (row.dataset.baFlair === flair && hasClasses && layer && hasFx && hasScan && hasVars) {
     row.classList.toggle("flairQuiet", quiet);
     layer.classList.toggle("flairQuiet", quiet);
     return;
   }
   clearFlair(row);
+  const vars = flairVars(flair);
+  row.dataset.baFlairVars = JSON.stringify(vars);
   for (const cls of classes) row.classList.add(cls);
   row.dataset.baFlair = flair;
   for (const [k, v] of Object.entries(vars)) row.style.setProperty(k, v);
@@ -4109,10 +4632,28 @@ function applyFlair(row, ev, flair) {
   row.prepend(wrap);
 }
 
+function cleanupRichObservers() {
+  for (const root of state.richRoots) {
+    if (root.isConnected) continue;
+    const observer = state.richObservers.get(root);
+    observer?.disconnect();
+    state.richObservers.delete(root);
+    state.richRoots.delete(root);
+  }
+}
+
 function ensureRichObserver(root) {
   if (state.richObservers.has(root) || typeof MutationObserver !== "function") return;
-  const observer = new MutationObserver(() => {
+  const observer = new MutationObserver((records) => {
     if (state.richRepairing.has(root)) return;
+    // Obfuscation rewrites text nodes every 100 ms. Those mutations must not
+    // re-render the rich subtree or the two systems fight forever.
+    const obfuscationOnly = records.length > 0 && records.every((record) => {
+      const node = record.target;
+      const element = node instanceof Element ? node : node?.parentElement;
+      return !!element?.closest?.(".fmtObf");
+    });
+    if (obfuscationOnly) return;
     const row = root.closest(".ag-msg-row");
     if (!(row instanceof HTMLElement)) return;
     const id = row.id?.startsWith("msg-") ? row.id.slice(4) : "";
@@ -4132,6 +4673,7 @@ function ensureRichObserver(root) {
   });
   observer.observe(root, { childList: true, subtree: true, characterData: true });
   state.richObservers.set(root, observer);
+  state.richRoots.add(root);
 }
 
 function applyRichText(row, ev, meta) {
@@ -4141,6 +4683,7 @@ function applyRichText(row, ev, meta) {
   if (previous && previous.id === ev.id && previous.html === root.innerHTML) return;
   const rich = meta.rich;
   if (!rich || typeof rich !== "string") return;
+  if (rich.length > RICH_MAX) return;
   if (stripFormat(rich) !== ev.content) return;
   if (!hasFormat(rich)) return;
 
@@ -4156,7 +4699,7 @@ function applyRichText(row, ev, meta) {
     root.innerHTML = renderFormatHtml(rich);
     root.dataset.baRich = ev.id;
     row.dataset.baRichId = ev.id;
-    state.richApplied.set(root, { id: ev.id, html: root.innerHTML });
+    state.richApplied.set(root, { id: ev.id, html: root.innerHTML, content: ev.content });
     ensureRichObserver(root);
     return;
   }
@@ -4212,7 +4755,7 @@ function applyRichText(row, ev, meta) {
   if (changed) {
     root.dataset.baRich = ev.id;
     row.dataset.baRichId = ev.id;
-    state.richApplied.set(root, { id: ev.id, html: root.innerHTML });
+    state.richApplied.set(root, { id: ev.id, html: root.innerHTML, content: ev.content });
     ensureRichObserver(root);
   }
 }
@@ -4240,14 +4783,25 @@ function nextFormatState(st, code) {
 function restoreRich(row) {
   const root = row.querySelector(".ag-msg-rich");
   if (!root) return;
+  const applied = state.richApplied.get(root);
   state.richApplied.delete(root);
   delete row.dataset.baRichId;
   const observer = state.richObservers.get(root);
   if (observer) {
     observer.disconnect();
     state.richObservers.delete(root);
+    state.richRoots.delete(root);
   }
   if (!root.dataset.baRich) return;
+  const current = (root.textContent || "").replace(/\s+/g, " ").trim();
+  const expected = String(applied?.content || "").replace(/\s+/g, " ").trim();
+  if (applied && expected && current !== expected) {
+    // React replaced or updated the message while rich text was applied. Do not
+    // overwrite its newer content with a stale snapshot.
+    delete root.dataset.baRich;
+    state.restoreMap.delete(root);
+    return;
+  }
   const original = state.restoreMap.get(root);
   if (original != null) root.innerHTML = original;
   delete root.dataset.baRich;
@@ -4260,14 +4814,17 @@ function restoreRich(row) {
 
 async function openViewer(id, tab = "json") {
   if (!id) return;
+  const request = ++state.viewerRequestSeq;
   let ev = eventById(id);
   if (!ev && state.pageReady) {
     const res = await askPage("getEvent", { id });
+    if (request !== state.viewerRequestSeq) return;
     if (res?.event) {
       ev = res.event;
       rememberEvent(ev);
     }
   }
+  if (request !== state.viewerRequestSeq) return;
   if (!ev) {
     toast("warning", "Event not captured", "Open or reload the channel so the extension can observe relay traffic.");
     return;
@@ -4283,16 +4840,15 @@ async function openViewer(id, tab = "json") {
     });
   }
   renderViewer();
-  const wrap = state.shadow?.querySelector("[data-modal='viewer']");
-  wrap?.classList.add("is-open");
-  wrap?.setAttribute("aria-hidden", "false");
+  setModalOpen("viewer", true);
 }
 
 function closeViewer() {
-  const wrap = state.shadow?.querySelector("[data-modal='viewer']");
-  wrap?.classList.remove("is-open");
-  wrap?.setAttribute("aria-hidden", "true");
+  state.viewerRequestSeq += 1;
+  setModalOpen("viewer", false);
   state.viewer = null;
+  const container = state.shadow?.querySelector("[data-role='viewer-content']");
+  if (container) container.innerHTML = "";
   clearStuckHoverMenus(null);
 }
 
@@ -4319,7 +4875,7 @@ function renderViewer() {
   const tabButtons = tabs
     .map(
       ([id, label]) =>
-        `<button type="button" class="ba-modal-tab${id === tab ? " is-active" : ""}" data-viewer-tab="${id}">${label}</button>`,
+        `<button type="button" class="ba-modal-tab${id === tab ? " is-active" : ""}" data-viewer-tab="${id}" role="tab" aria-selected="${id === tab ? "true" : "false"}">${label}</button>`,
     )
     .join("");
 
@@ -4351,8 +4907,12 @@ function renderViewer() {
       ${verified ? `<div class="ba-warning ${verified.ok ? "ok" : "err"}">${h(verified.ok ? "Signature and id verify against the event fields." : verified.error || "Verification failed.")}</div>` : `<div class="ba-hint">Click verify signature to check the event with the page's own nostr-tools build.</div>`}
       <button type="button" class="ba-btn" data-action="verify-event">verify signature</button>`;
   } else {
+    const eventIds = new Set([event.id]);
+    const alias = state.aliases.get(event.id);
+    if (alias) eventIds.add(alias);
+    for (const [from, to] of state.aliases) if (to === event.id) eventIds.add(from);
     const rows = state.logs
-      .filter((log) => log.eventId === event.id)
+      .filter((log) => eventIds.has(log.eventId))
       .slice(-30)
       .reverse()
       .map(
@@ -4372,7 +4932,7 @@ function renderViewer() {
       <div class="ba-modal-space"></div>
       <button type="button" class="ba-icon-btn" data-close-modal="viewer" aria-label="Close">✕</button>
     </div>
-    <div class="ba-modal-tabs">${tabButtons}</div>
+    <div class="ba-modal-tabs" role="tablist" aria-label="Event details sections">${tabButtons}</div>
     <div class="ba-modal-body">
       <div class="ba-meta-grid">
         <div class="ba-meta-cell"><div class="ba-meta-k">kind</div><div class="ba-meta-v">${h(event.kind)} · ${h(kindLabel(event.kind))}</div></div>
@@ -4442,34 +5002,53 @@ function highlightJson(text) {
 // ---------------------------------------------------------------------------
 
 function queueReview(payload, requestId) {
+  if (!state.shadow?.querySelector("[data-role='review-content']")) {
+    sendPage("response", { action: "cancel" }, requestId);
+    toast("warning", "Review unavailable", "The outgoing event was cancelled because the review UI is not ready.");
+    return;
+  }
+  if (state.reviewQueue.length >= 8) {
+    sendPage("response", { action: "cancel" }, requestId);
+    toast("warning", "Review queue full", "The outgoing event was cancelled; finish the open reviews and try again.");
+    return;
+  }
   state.reviewQueue.push({ payload, requestId });
   if (!state.review) openNextReview();
+}
+
+function reviewCountdown() {
+  if (!state.review) return "review expired";
+  const seconds = Math.max(0, Math.ceil((state.review.deadline - Date.now()) / 1000));
+  return `${seconds}s left`;
 }
 
 function openNextReview() {
   const next = state.reviewQueue.shift();
   if (!next) return;
-  state.review = { ...next, selected: new Set(), timer: null };
+  state.review = { ...next, selected: new Set(), timer: null, ticker: null, deadline: Date.now() + 174000 };
   renderReview();
-  const wrap = state.shadow?.querySelector("[data-modal='review']");
-  wrap?.classList.add("is-open");
-  wrap?.setAttribute("aria-hidden", "false");
-  state.review.timer = window.setTimeout(() => finishReview("cancel"), 170000);
+  setModalOpen("review", true);
+  state.review.timer = window.setTimeout(() => finishReview("cancel"), 174000);
+  state.review.ticker = window.setInterval(() => {
+    const el = state.shadow?.querySelector("[data-role='review-timer']");
+    if (el) el.textContent = reviewCountdown();
+  }, 1000);
 }
 
 function finishReview(action, scrub = false) {
   if (!state.review) return;
   const review = state.review;
   window.clearTimeout(review.timer);
+  if (review.ticker) window.clearInterval(review.ticker);
   const payload =
     action === "send"
-      ? { action: "send", stripTags: scrub ? [...review.selected] : [] }
+      ? { action: "send", stripTagIndexes: scrub ? [...review.selected] : [] }
       : { action: "cancel" };
   sendPage("response", payload, review.requestId);
   state.review = null;
-  const wrap = state.shadow?.querySelector("[data-modal='review']");
-  wrap?.classList.remove("is-open");
-  wrap?.setAttribute("aria-hidden", "true");
+  setModalOpen("review", false);
+  const container = state.shadow?.querySelector("[data-role='review-content']");
+  if (container) container.innerHTML = "";
   if (state.reviewQueue.length) openNextReview();
 }
 
@@ -4483,7 +5062,7 @@ function renderReview() {
   const important = new Set(["g", "d", "e", "p", "k", "h", "a", "q"]);
   const tags = (proposed.tags || []).map((tag, index) => {
     const name = tag?.[0] || "";
-    const value = tag?.slice(1).join(" ").slice(0, 90) || "";
+    const value = tag?.slice(1).join(" ") || "";
     const disabled = important.has(name) || name === "glub";
     return `<label class="ba-review-tag">
       <input type="checkbox" data-review-tag="${index}" ${disabled ? "disabled" : ""}>
@@ -4496,7 +5075,7 @@ function renderReview() {
     <div class="ba-modal-head">
       <div>
         <div class="ba-modal-title">review outgoing ${h(kindLabel(proposed.kind))}</div>
-        <div class="ba-modal-sub">${h(payload.group || kindGroup(proposed.kind))} · check a tag to remove it before signing</div>
+        <div class="ba-modal-sub">${h(payload.group || kindGroup(proposed.kind))} · check a tag to remove it before signing · <span data-role="review-timer">${h(reviewCountdown())}</span></div>
       </div>
       <div class="ba-modal-space"></div>
       <button type="button" class="ba-icon-btn" data-action="review-cancel" aria-label="Cancel">✕</button>
@@ -4505,8 +5084,9 @@ function renderReview() {
       <div class="ba-warning">This event is paused before signing. Nothing has left your client yet.</div>
       <div class="ba-meta-grid">
         <div class="ba-meta-cell"><div class="ba-meta-k">kind</div><div class="ba-meta-v">${h(proposed.kind)} · ${h(kindLabel(proposed.kind))}</div></div>
-        <div class="ba-meta-cell"><div class="ba-meta-k">content</div><div class="ba-meta-v">${h(String(proposed.content || "").slice(0, 80))}</div></div>
-        <div class="ba-meta-cell"><div class="ba-meta-k">source</div><div class="ba-meta-v">${h(payload.source || "signer")}</div></div>
+        <div class="ba-meta-cell"><div class="ba-meta-k">content</div><div class="ba-meta-v"><pre class="ba-review-content">${h(String(proposed.content || ""))}</pre></div></div>
+        ${String(payload.original?.content || "") !== String(proposed.content || "") ? `<div class="ba-meta-cell"><div class="ba-meta-k">original</div><div class="ba-meta-v"><pre class="ba-review-content">${h(String(payload.original?.content || ""))}</pre></div></div>` : ""}
+        <div class="ba-meta-cell"><div class="ba-meta-k">source</div><div class="ba-meta-v">${h(payload.source || "provider")}</div></div>
       </div>
       <div class="ba-card-head" style="margin-top:4px"><span class="ba-card-title">Tags</span><span class="ba-head-space"></span><span class="ba-hint">hover to read</span></div>
       <div class="ba-scrollbox">${tags || `<div class="ba-empty">No tags.</div>`}</div>
@@ -4529,6 +5109,7 @@ function renderReview() {
 document.addEventListener(
   "click",
   (event) => {
+    if (!state.enabledReady || state.settings.enabled === false) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     const bar = target.closest(".ba-composer-bar");
@@ -4538,21 +5119,24 @@ document.addEventListener(
       event.preventDefault();
       event.stopPropagation();
       const pop = bar.querySelector(".ba-color-popover");
-      if (pop) pop.hidden = !pop.hidden;
+      if (pop) {
+        pop.hidden = !pop.hidden;
+        colorToggle.setAttribute("aria-expanded", pop.hidden ? "false" : "true");
+      }
       return;
     }
     const codeBtn = target.closest("[data-code]");
     if (codeBtn) {
       event.preventDefault();
       event.stopPropagation();
-      insertInto(composerTextarea(), codeBtn.getAttribute("data-code") || "");
+      insertInto(composerTextarea(bar), codeBtn.getAttribute("data-code") || "");
       return;
     }
     const color = target.closest("[data-color]");
     if (color) {
       event.preventDefault();
       event.stopPropagation();
-      insertInto(composerTextarea(), `&${color.getAttribute("data-color")}`);
+      insertInto(composerTextarea(bar), `&${color.getAttribute("data-color")}`);
       return;
     }
     const action = target.closest("[data-action]")?.getAttribute("data-action");
@@ -4572,6 +5156,7 @@ document.addEventListener(
 document.addEventListener(
   "pointerdown",
   (event) => {
+    if (!state.enabledReady || state.settings.enabled === false) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     if (target.closest(".ba-composer-bar")) event.preventDefault();
@@ -4599,6 +5184,7 @@ function authorMention(row, event) {
 }
 
 function captureContextTarget(event) {
+  if (!state.enabledReady || state.settings.enabled === false) return;
   const target = event.target;
   if (!(target instanceof Element)) {
     state.contextTarget = null;
@@ -4652,6 +5238,8 @@ function enhanceContextMenu() {
     btn.type = "button";
     btn.className = "ag-ctx-item";
     btn.setAttribute("data-ba-action", kind);
+    btn.setAttribute("role", "menuitem");
+    btn.tabIndex = 0;
     btn.title = title || label;
     const iconEl = document.createElement("span");
     iconEl.className = "ag-ctx-item-icon";
@@ -4665,6 +5253,7 @@ function enhanceContextMenu() {
   const divider = document.createElement("div");
   divider.className = "ag-ctx-divider";
   divider.setAttribute("data-ba-actions", "1");
+  divider.setAttribute("role", "separator");
   const items = [...menu.querySelectorAll(".ag-ctx-item")];
   const last = items[items.length - 1];
   if (last) last.after(divider);
@@ -4678,8 +5267,8 @@ function enhanceContextMenu() {
 }
 
 function sendComposerText(text) {
-  const ta = document.querySelector(".ag-composer-input");
-  if (!(ta instanceof HTMLTextAreaElement) || ta.disabled) {
+  const ta = composerTextarea();
+  if (!(ta instanceof HTMLTextAreaElement) || ta.disabled || ta.readOnly) {
     toast("warning", "Composer unavailable", "Open a channel or DM with a working composer first.");
     return false;
   }
@@ -4691,9 +5280,10 @@ function sendComposerText(text) {
   try {
     ta.setSelectionRange(text.length, text.length);
   } catch {}
+  const dock = ta.closest(".ag-composer-dock") || document;
   let tries = 0;
   const send = () => {
-    const btn = document.querySelector(".ag-composer-send-btn");
+    const btn = dock.querySelector(".ag-composer-send-btn") || document.querySelector(".ag-composer-send-btn");
     if (btn instanceof HTMLElement && !btn.disabled) {
       btn.click();
       return;
@@ -4755,23 +5345,23 @@ function insertCustomActionToken(token) {
 }
 
 function sendSlashAction(raw) {
-  const match = String(raw || "").match(/^\/me\s+([\s\S]+)$/i);
-  if (!match) return false;
-  const text = match[1].trim();
-  if (!text) return false;
-  updateSettings((s) => {
-    s.actions.custom = text.slice(0, 60);
-  });
+  const match = String(raw || "").match(/^\/me\s*([\s\S]*)$/i);
+  const text = match?.[1]?.trim() || "";
+  if (!text) {
+    toast("warning", "Nothing to send", "Write something after /me first.");
+    return false;
+  }
   const body = formatActionText(text, state.contextTarget?.mention || "", selfMention());
   if (!body) return false;
   return sendComposerText(body);
 }
 
 function closeActionModal() {
-  const wrap = state.shadow?.querySelector("[data-modal='action']");
-  wrap?.classList.remove("is-open");
-  wrap?.setAttribute("aria-hidden", "true");
+  setModalOpen("action", false);
   state.customAction = null;
+  state.contextTarget = null;
+  const container = state.shadow?.querySelector("[data-role='action-content']");
+  if (container) container.innerHTML = "";
 }
 
 function renderCustomAction() {
@@ -4830,9 +5420,14 @@ function openCustomAction() {
   clearStuckHoverMenus(null);
   state.customAction = { text: state.settings.actions.custom || "boops" };
   renderCustomAction();
-  const wrap = state.shadow?.querySelector("[data-modal='action']");
-  wrap?.classList.add("is-open");
-  wrap?.setAttribute("aria-hidden", "false");
+  setModalOpen("action", true);
+  window.requestAnimationFrame(() => {
+    const input = state.shadow?.querySelector("#ba-custom-action-input");
+    if (input instanceof HTMLInputElement) {
+      input.focus();
+      input.select();
+    }
+  });
 }
 
 function sendCustomAction() {
@@ -4856,6 +5451,7 @@ function sendCustomAction() {
 document.addEventListener(
   "click",
   (event) => {
+    if (!state.enabledReady || state.settings.enabled === false) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     const card = target.closest(".ag-suite-card");
@@ -4871,6 +5467,7 @@ document.addEventListener("contextmenu", captureContextTarget, true);
 document.addEventListener(
   "click",
   (event) => {
+    if (!state.enabledReady || state.settings.enabled === false) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     const btn = target.closest("[data-ba-action]");
@@ -4886,6 +5483,7 @@ document.addEventListener(
 document.addEventListener(
   "mousedown",
   (event) => {
+    if (!state.enabledReady || state.settings.enabled === false) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     if (target.closest("[data-ba-action]")) {
@@ -4905,14 +5503,28 @@ function toast(level, title, detail = "") {
   if (!root) return;
   const container = root.querySelector("[data-role='toasts']");
   if (!container) return;
+  const key = `${level}:${title}:${detail}`;
+  for (const existing of container.querySelectorAll(".ba-toast")) {
+    if (existing.dataset.baToastKey === key) return;
+  }
+  while (container.children.length >= 5) container.firstElementChild?.remove();
   const node = document.createElement("div");
   node.className = `ba-toast ${level}`;
-  node.innerHTML = `<div><div class="ba-toast-title">${h(title)}</div>${detail ? `<div class="ba-toast-detail">${h(detail)}</div>` : ""}</div>`;
-  container.appendChild(node);
-  const timer = window.setTimeout(() => {
+  node.dataset.baToastKey = key;
+  node.setAttribute("role", level === "error" ? "alert" : "status");
+  node.innerHTML = `<div><div class="ba-toast-title">${h(title)}</div>${detail ? `<div class="ba-toast-detail">${h(detail)}</div>` : ""}</div><button type="button" class="ba-toast-close" aria-label="Dismiss">×</button>`;
+  const close = node.querySelector(".ba-toast-close");
+  let timer = null;
+  const remove = () => {
+    if (timer !== null) {
+      window.clearTimeout(timer);
+      state.toasts.delete(timer);
+    }
     node.remove();
-    state.toasts.delete(timer);
-  }, level === "error" ? 7000 : 4200);
+  };
+  close?.addEventListener("click", remove);
+  container.appendChild(node);
+  timer = window.setTimeout(remove, level === "error" ? 7000 : 4200);
   state.toasts.add(timer);
 }
 
@@ -4950,13 +5562,11 @@ function renderDiagnostics() {
   const el = root.querySelector("[data-role='diagnostics']");
   if (!el) return;
   const status = state.status || {};
-  const extensionVersion = api.runtime.getManifest?.().version || "1.2.2";
+  const extensionVersion = api.runtime.getManifest?.().version || VERSION;
   el.innerHTML = `
     <div class="ba-kv"><span>extension</span><span>${h(extensionVersion)}</span></div>
     <div class="ba-kv"><span>page bridge</span><span>${state.pageReady ? "ready" : "waiting"}</span></div>
-    <div class="ba-kv"><span>sign mode</span><span>${h(status.signMode || "unknown")}</span></div>
-    <div class="ba-kv"><span>signer hooked</span><span>${status.signerHooked ? "yes" : "no"}</span></div>
-    <div class="ba-kv"><span>nip-07 wrapper</span><span>${status.nip07Patched ? "yes" : "no"}</span></div>
+    <div class="ba-kv"><span>nip-07 rewriter</span><span>${status.nip07Patched ? "yes" : "no"}</span></div>
     <div class="ba-kv"><span>pubkey</span><span>${h(short(status.pubkey || "", 20))}</span></div>
     <div class="ba-kv"><span>glub build</span><span>${h(effectiveBuild(state.settings) || "missing")}</span></div>
     <div class="ba-kv"><span>events in memory</span><span>${state.events.size}</span></div>
@@ -4967,12 +5577,10 @@ function renderDiagnostics() {
 function copyDiagnostics() {
   const status = state.status || {};
   const text = [
-    `Better Agnostr ${api.runtime.getManifest?.().version || "1.2.2"}`,
+    `Better Agnostr ${api.runtime.getManifest?.().version || VERSION}`,
     `url: ${location.href}`,
     `page bridge: ${state.pageReady}`,
-    `sign mode: ${status.signMode}`,
-    `signer hooked: ${status.signerHooked}`,
-    `nip07 wrapped: ${status.nip07Patched}`,
+    `nip07 rewriter: ${status.nip07Patched}`,
     `pubkey: ${status.pubkey}`,
     `glub build: ${effectiveBuild(state.settings)}`,
     `events: ${state.events.size}`,
@@ -4992,6 +5600,10 @@ function observePage() {
     ".ag-msg-actions",
     ".ag-msg-head",
     ".ag-app-rail",
+    ".ag-bitchat-drawer",
+    ".ag-bitchat-quickbar",
+    ".ag-bitchat-globe-stage",
+    ".ag-suite-footer",
     ".ag-rail-srv",
     ".ag-srv-mobile-rail",
     ".ag-mobile-tabbar",
@@ -5103,19 +5715,29 @@ async function init() {
   } catch {
     state.settings = normalizeSettings({});
   }
-  if (!hadStoredSettings) {
+  const storedKeys = storedSettings && typeof storedSettings === "object" ? Object.keys(storedSettings) : [];
+  const storedIsSparse = !hadStoredSettings || storedKeys.every((key) => key === "enabled" || key === "schema");
+  if (storedIsSparse) {
     const backup = readSettingsBackup();
     if (backup) {
-      storedSettings = backup;
-      state.settings = normalizeSettings(backup);
       try {
+        state.settings = normalizeSettings(mergeSettings(backup, storedSettings));
+        storedSettings = state.settings;
         await api.storage.local.set({ [STORAGE_KEY]: state.settings });
-      } catch {}
+      } catch {
+        state.settings = normalizeSettings({});
+      }
     }
   } else {
     writeSettingsBackup(state.settings);
   }
   state.settingsEpoch = 1;
+  if (state.settings.enabled !== false) {
+    document.documentElement.classList.toggle(
+      "ba-hide-notification-button",
+      state.settings.appearance.hideNotificationButton === true,
+    );
+  }
   state.activeTab = state.settings.ui.activeTab || "studio";
   state.betterTab = state.settings.ui.betterTab || "line";
   state.settings.ui.panelOpen = false;
@@ -5124,22 +5746,47 @@ async function init() {
     if (area !== "local") return;
     const change = changes[STORAGE_KEY];
     if (!change) return;
-    if (change.newValue && typeof change.newValue === "object") writeSettingsBackup(change.newValue);
-    const before = change.oldValue?.enabled !== false;
+    const before = state.settings.enabled !== false;
     const after = change.newValue?.enabled !== false;
-    if (before === after) return;
-    if (after) overrideNativeSounds();
-    else restoreNativeSounds();
-    location.reload();
+    if (before !== after) {
+      if (after) overrideNativeSounds();
+      else restoreNativeSounds();
+      location.reload();
+      return;
+    }
+    if (!change.newValue || typeof change.newValue !== "object") {
+      location.reload();
+      return;
+    }
+    const incoming = normalizeSettings(mergeSettings(state.settings, change.newValue));
+    incoming.ui = {
+      ...incoming.ui,
+      activeTab: state.settings.ui.activeTab,
+      betterTab: state.settings.ui.betterTab,
+      panelOpen: state.settings.ui.panelOpen,
+      firstRun: state.settings.ui.firstRun,
+    };
+    if (JSON.stringify(incoming) === JSON.stringify(state.settings)) return;
+    state.settings = incoming;
+    state.settingsEpoch += 1;
+    writeSettingsBackup(state.settings);
+    if (!state.enabledReady || state.settings.enabled === false) return;
+    syncInputs();
+    syncDynamic();
+    applyTheme();
+    applyCallCss();
+    ensureToolbars();
+    applyShortcutVisibility();
+    scheduleEnhance();
+    scheduleSettingsSync();
   });
 
-  window.addEventListener("message", handlePageMessage);
-  document.addEventListener("ba-page", handlePageCustomEvent);
+  state.enabledReady = true;
   if (state.settings.enabled === false) {
     restoreNativeSounds();
-    hello();
     return;
   }
+  window.addEventListener("message", handlePageMessage);
   document.documentElement.classList.add("ba-active");
   overrideNativeSounds();
   document.addEventListener("pointerdown", () => {
@@ -5195,12 +5842,55 @@ async function init() {
     { passive: true, capture: true },
   );
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && state.enhancePending) {
+    if (document.hidden) {
+      state.enhancePending = true;
+      state.pageObserver?.disconnect();
+      return;
+    }
+    state.pageObserverStart?.();
+    if (state.enhancePending) {
       state.enhancePending = false;
       scheduleEnhance(true);
     }
+    replaceBitchatText();
   });
-  window.addEventListener("resize", () => scheduleEnhance(), { passive: true });
+  const titleEl = document.querySelector("title");
+  if (titleEl && typeof MutationObserver === "function") {
+    new MutationObserver(() => {
+      if (/\bbitchat\b/i.test(document.title)) replaceBitchatText();
+    }).observe(titleEl, { childList: true, characterData: true, subtree: true });
+  }
+  window.addEventListener("resize", () => {
+    scheduleEnhance();
+    if (state.emojiAnchor) positionEmojiPicker(state.emojiAnchor);
+  }, { passive: true });
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (state.emojiAnchor) positionEmojiPicker(state.emojiAnchor);
+    },
+    { passive: true, capture: true },
+  );
+  window.visualViewport?.addEventListener("resize", () => {
+    if (state.emojiAnchor) positionEmojiPicker(state.emojiAnchor);
+  });
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key !== "Escape" || state.modalOpen) return;
+      const pop = document.querySelector(".ba-emoji-popover");
+      if (pop && !pop.hidden) hideEmojiPicker();
+    },
+    true,
+  );
+  window.addEventListener("pagehide", () => {
+    if (state.saveTimer) {
+      window.clearTimeout(state.saveTimer);
+      state.saveTimer = null;
+      persistSettings();
+    }
+    releaseNativeSounds();
+  });
   window.setInterval(tickObfuscation, 100);
   window.setInterval(flairTickerTick, 1500);
   ensureHost();

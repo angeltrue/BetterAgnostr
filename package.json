@@ -1,6 +1,6 @@
 {
   "name": "better-agnostr",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "Firefox extension for agnostr.com: JSON viewer, Glub line/flair studio, client spoofing, retro sounds, privacy scrubber, call blocking.",
   "main": "index.js",
   "directories": {
@@ -8,8 +8,9 @@
   },
   "scripts": {
     "build": "node build.mjs",
+    "test": "node --test test/*.test.js",
     "start": "npm run build && web-ext run --source-dir dist",
-    "lint": "eslint --no-config-lookup --parser-options '{\"ecmaVersion\":2023,\"sourceType\":\"module\"}' --global 'window,document,console,setTimeout,clearTimeout,setInterval,clearInterval,crypto,localStorage,Node,NodeFilter,Element,HTMLElement,HTMLInputElement,HTMLTextAreaElement,CustomEvent,MessageEvent,Blob,URL,location,navigator,chrome,browser,fetch,WeakMap,WeakSet,Map,Set,DataView,TextEncoder,TextDecoder,Uint8Array,ArrayBuffer,structuredClone,performance,HTMLCanvasElement,Image,Worker,indexedDB,DOMParser,FileReader,RTCPeerConnection,MediaStream,MediaRecorder,AudioContext,Event,KeyboardEvent,MouseEvent,PointerEvent,MutationObserver,IntersectionObserver,globalThis' --rule '{\"no-undef\":\"error\",\"no-unused-vars\":\"warn\",\"no-redeclare\":\"error\"}' src/content.js src/page.js src/lib/glub.js src/lib/settings.js src/background.js src/popup.js"
+    "lint": "eslint --no-config-lookup --parser-options '{\"ecmaVersion\":2023,\"sourceType\":\"module\"}' --global 'window,document,console,setTimeout,clearTimeout,setInterval,clearInterval,crypto,localStorage,Node,NodeFilter,Element,HTMLElement,HTMLInputElement,HTMLTextAreaElement,CustomEvent,MessageEvent,Blob,URL,location,navigator,chrome,browser,fetch,WeakMap,WeakSet,Map,Set,DataView,TextEncoder,TextDecoder,Uint8Array,ArrayBuffer,structuredClone,performance,HTMLCanvasElement,Image,Worker,indexedDB,DOMParser,FileReader,RTCPeerConnection,MediaStream,MediaRecorder,AudioContext,Event,KeyboardEvent,MouseEvent,PointerEvent,MutationObserver,IntersectionObserver,globalThis' --rule '{\"no-undef\":\"error\",\"no-unused-vars\":\"warn\",\"no-redeclare\":\"error\"}' src/content.js src/page.js src/lib/glub.js src/lib/glub-flair.js src/lib/settings.js src/lib/version.js src/background.js src/popup.js"
   },
   "keywords": [],
   "author": "",

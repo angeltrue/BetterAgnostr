@@ -62,6 +62,10 @@ for (const size of [16, 32, 48, 128]) {
 }
 
 const pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+const manifest = JSON.parse(await readFile(path.join(src, "manifest.json"), "utf8"));
+if (pkg.version !== manifest.version) {
+  throw new Error(`Version mismatch: package.json ${pkg.version} != manifest.json ${manifest.version}`);
+}
 const readme = await readFile(path.join(root, "README.md"), "utf8").catch(() => "");
 if (readme) await writeFile(path.join(dist, "README.md"), readme);
 

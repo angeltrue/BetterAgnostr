@@ -1,18 +1,15 @@
-import { finalizeEvent, getPublicKey, verifyEvent } from "nostr-tools/pure";
-import { decode, npubEncode, noteEncode, neventEncode } from "nostr-tools/nip19";
-import { hmac } from "@noble/hashes/hmac";
-import { sha256 } from "@noble/hashes/sha256";
-import { concatBytes, hexToBytes, utf8ToBytes } from "@noble/hashes/utils";
+import { verifyEvent } from "nostr-tools/pure";
+import { npubEncode, noteEncode, neventEncode } from "nostr-tools/nip19";
+import { flairName } from "./lib/glub-flair.js";
 import {
   CHAT_KINDS,
   NOTE_KINDS,
   buildGlubTag,
   getTagValue,
   hasFormat,
-  isValidFlair,
   kindGroup,
+  normalizeTemplate,
   parseGlubMeta,
-  sanitizeTemplate,
   stripFormat,
   stripTrackingParams,
   RICH_MAX,
@@ -24,6 +21,7 @@ import {
   normalizeSettings,
   policyForKind,
 } from "./lib/settings.js";
+import { VERSION } from "./lib/version.js";
 
 (() => {
   if (window.__betterAgnostrPage) return;
@@ -36,6 +34,7 @@ import {
     configReady: false,
     configWaiters: [],
     active: false,
+    started: false,
     callObserver: null,
     settings: normalizeSettings({}),
     events: new Map(),
@@ -47,13 +46,13 @@ import {
     logTimer: null,
     sockets: new Map(),
     relays: new Map(),
-    signerHooked: false,
-    signerInstance: null,
     nip07Patched: false,
-    signMode: "auto",
+    nip07Provider: null,
+    nip07IdentityAt: 0,
+    signMode: "none",
     pubkey: "",
     npub: "",
-    signerScanTimer: null,
+    nip07Timer: null,
     statusTimer: null,
     pending: new Map(),
     requestSeq: 0,
@@ -61,11 +60,16 @@ import {
     screenshotMode: false,
     buildPromise: null,
     buildRequestedAt: 0,
+    buildStale: false,
     startedAt: Date.now(),
     callDrops: 0,
     preparedCount: 0,
+    verifiedIncoming: new Set(),
     postSeq: 0,
   };
+
+  const preparedEvents = new WeakSet();
+  const nip07Wrappers = new WeakMap();
 
   // Better Agnostr owns message chimes while it is active. Leave native
   // notifications, ringtone, and vibration intact.
@@ -110,10 +114,7 @@ import {
     state.postSeq += 1;
     const envelope = { __ba: true, dir: "page", token: state.token, seq: state.postSeq, type, payload, id };
     try {
-      window.postMessage(envelope, "*");
-    } catch {}
-    try {
-      document.dispatchEvent(new CustomEvent("ba-page", { detail: JSON.stringify(envelope) }));
+      window.postMessage(envelope, location.origin);
     } catch {}
   }
 
@@ -192,14 +193,16 @@ import {
   async function handleUiData(data) {
     if (!data || data.__ba !== true || data.dir !== "ui") return;
     if (data.type === "hello") {
-      state.token = data.token || state.token;
+      if (!data.token) return;
+      if (state.token && data.token !== state.token) return;
+      state.token = String(data.token);
       setConfig(parseSettingsPayload(data.payload?.settings));
       publishStatus();
-      post("ready", { version: "1.2.2" });
+      post("ready", { version: VERSION });
       if (state.active) start();
       return;
     }
-    if (data.token && state.token && data.token !== state.token) return;
+    if (data.token !== state.token) return;
     if (data.type === "config") {
       setConfig(parseSettingsPayload(data.payload?.settings));
       return;
@@ -217,68 +220,6 @@ import {
     if (data.type === "getRecent") {
       const limit = Math.min(500, Math.max(1, Number(data.payload?.limit) || 100));
       post("recent", { events: state.eventOrder.slice(-limit).map((id) => state.events.get(id)).filter(Boolean) }, data.id);
-      return;
-    }
-    if (data.type === "inspectPeer") {
-      const payload = data.payload || {};
-      let pubkey = String(payload.pubkey || "").toLowerCase();
-      let npub = String(payload.npub || "");
-      if (!pubkey && npub) {
-        try {
-          const decoded = decode(npub);
-          if (decoded?.type === "npub" && typeof decoded.data === "string") pubkey = decoded.data.toLowerCase();
-        } catch {}
-      }
-      if (!pubkey) {
-        if (data.id) post("response", { ok: false, error: "Invalid npub." }, data.id);
-        return;
-      }
-      if (!npub) {
-        try {
-          npub = npubEncode(pubkey);
-        } catch {}
-      }
-      const fn = findInspectPeerFn();
-      if (!fn) {
-        if (data.id) post("response", { ok: false, error: "Profile opener not found." }, data.id);
-        return;
-      }
-      const context = findAppContext();
-      let peer = null;
-      try {
-        peer = context?.getPeerByPubkey?.(pubkey) || null;
-      } catch {}
-      if (!peer) {
-        peer = context?.peers?.find?.((p) => String(p?.pubkey || "").toLowerCase() === pubkey) || null;
-      }
-      if (!peer) {
-        peer = context?.servers?.members?.find?.((p) => String(p?.pubkey || "").toLowerCase() === pubkey) || null;
-      }
-      const nickname = String(payload.nickname || peer?.nickname || "").trim();
-      const displayHandle = peer?.displayHandle || (nickname ? `@${nickname}#${pubkey.slice(-4)}` : `@anon${pubkey.slice(-4)}#${pubkey.slice(-4)}`);
-      const safePeer = {
-        ...(peer || {}),
-        pubkey,
-        npub,
-        nickname: nickname || peer?.nickname || "",
-        displayHandle,
-        lastSeenAt: Number(peer?.lastSeenAt) || Math.floor(Date.now() / 1000),
-        isOnline: !!peer?.isOnline,
-        isSelf: false,
-        isTeleported: !!peer?.isTeleported,
-        isMeshBridge: !!peer?.isMeshBridge,
-        isBlocked: !!peer?.isBlocked,
-        isTrusted: !!peer?.isTrusted,
-        messageCount: Number(peer?.messageCount) || 0,
-        channels: Array.isArray(peer?.channels) ? peer.channels : [],
-      };
-      try {
-        fn(safePeer);
-        if (data.id) post("response", { ok: true }, data.id);
-        else post("notice", { level: "success", title: "Profile opened", detail: displayHandle });
-      } catch (err) {
-        if (data.id) post("response", { ok: false, error: err instanceof Error ? err.message : String(err) }, data.id);
-      }
       return;
     }
     if (data.type === "getLogs") {
@@ -324,7 +265,8 @@ import {
   const uiSeen = new Set();
   function handleUiEnvelope(data) {
     if (!data || data.__ba !== true || data.dir !== "ui") return;
-    const key = data.seq != null ? `seq:${data.seq}` : null;
+    if (data.type !== "hello" && data.token !== state.token) return;
+    const key = data.seq != null ? `${data.token || ""}:seq:${data.seq}` : null;
     if (key) {
       if (uiSeen.has(key)) return;
       uiSeen.add(key);
@@ -337,16 +279,11 @@ import {
   }
 
   window.addEventListener("message", (event) => {
+    if (event.source !== window) return;
+    if (event.origin && event.origin !== location.origin) return;
     const data = event.data;
     if (!data || data.__ba !== true || data.dir !== "ui") return;
     handleUiEnvelope(data);
-  });
-
-  document.addEventListener("ba-ui", (event) => {
-    try {
-      const data = typeof event.detail === "string" ? JSON.parse(event.detail) : event.detail;
-      handleUiEnvelope(data);
-    } catch {}
   });
 
   // ---------------------------------------------------------------------------
@@ -374,7 +311,8 @@ import {
     if (!existing) {
       state.events.set(ev.id, ev);
       state.eventOrder.push(ev.id);
-      while (state.eventOrder.length > MAX_EVENTS) {
+      const cap = Math.max(100, Math.min(5000, Number(state.settings.inspector?.maxEvents) || MAX_EVENTS));
+      while (state.eventOrder.length > cap) {
         const old = state.eventOrder.shift();
         if (old) state.events.delete(old);
       }
@@ -400,52 +338,61 @@ import {
   function reconstructEvent(id) {
     if (!id || !/^[0-9a-f]{64}$/i.test(id)) return null;
     const out = { id, pubkey: "", created_at: 0, kind: 0, tags: [], content: "", sig: "", _reconstructed: true };
+    let idx = [];
     try {
-      const idx = JSON.parse(localStorage.getItem("agnostr:v2:msg_index") || "[]");
-      if (Array.isArray(idx)) {
-        for (const geo of idx) {
-          const key = `agnostr:v2:msgs:${geo}`;
-          const list = JSON.parse(localStorage.getItem(key) || "[]");
-          if (!Array.isArray(list)) continue;
-          const hit = list.find((m) => m && m.id === id);
-          if (!hit) continue;
-          out.pubkey = String(hit.pubkey || hit.senderPubkey || "").toLowerCase();
-          out.created_at = Number(hit.createdAt) || 0;
-          out.kind = 20000;
-          out.content = String(hit.content || "");
-          const stored = Array.isArray(hit.tags) ? hit.tags.filter(Array.isArray).map((t) => t.map(String)) : [];
-          out.tags = stored;
-          const has = (name) => stored.some((t) => t[0] === name);
-          if (!has("g")) out.tags.push(["g", geo]);
-          if (hit.nickname && !has("n")) out.tags.push(["n", String(hit.nickname)]);
-          if (hit.clientName && !has("client")) out.tags.push(["client", String(hit.clientName)]);
-          if (hit.replyTo?.id && !has("e")) {
-            out.tags.push(["e", String(hit.replyTo.id), "", "reply"]);
-            if (hit.replyTo.pubkey) out.tags.push(["p", String(hit.replyTo.pubkey)]);
-          }
-          if (hit.imageAttachment?.url) out.tags.push(["imeta", `url ${hit.imageAttachment.url}`]);
-          if (hit.voiceMemo?.url) out.tags.push(["imeta", `url ${hit.voiceMemo.url}`, "m audio/webm"]);
-          return out;
-        }
-      }
-      const threads = JSON.parse(localStorage.getItem("agnostr:v2:dm_threads") || "[]");
-      if (Array.isArray(threads)) {
-        for (const thread of threads) {
-          if (!thread || !Array.isArray(thread.messages)) continue;
-          const hit = thread.messages.find((m) => m && m.id === id);
-          if (!hit) continue;
-          out.pubkey = String(hit.senderPubkey || hit.pubkey || "").toLowerCase();
-          out.created_at = Number(hit.createdAt) || Math.floor(Number(hit.orderMs || 0) / 1000);
-          out.kind = 4;
-          out.content = String(hit.content || "");
-          out.tags = Array.isArray(hit.tags) ? hit.tags.filter(Array.isArray).map((t) => t.map(String)) : [];
-          if (!out.tags.some((t) => t[0] === "p")) out.tags.push(["p", String(thread.peerPubkey || "")]);
-          if (hit.protocol && !out.tags.some((t) => t[0] === "t")) out.tags.push(["t", `agnostr-${hit.protocol}`]);
-          return out;
-        }
-      }
+      idx = JSON.parse(localStorage.getItem("agnostr:v2:msg_index") || "[]");
     } catch {
-      return null;
+      idx = [];
+    }
+    if (Array.isArray(idx)) {
+      for (const geo of idx.slice(0, 100)) {
+        let list = [];
+        try {
+          list = JSON.parse(localStorage.getItem(`agnostr:v2:msgs:${geo}`) || "[]");
+        } catch {
+          continue;
+        }
+        if (!Array.isArray(list)) continue;
+        const hit = list.slice(0, 5000).find((m) => m && m.id === id);
+        if (!hit) continue;
+        out.pubkey = String(hit.pubkey || hit.senderPubkey || "").toLowerCase();
+        out.created_at = Number(hit.createdAt) || 0;
+        out.kind = Number.isFinite(Number(hit.kind)) ? Number(hit.kind) : 20000;
+        out.content = String(hit.content || "");
+        out.tags = Array.isArray(hit.tags) ? hit.tags.filter(Array.isArray).map((t) => t.map(String)) : [];
+        const has = (name) => out.tags.some((t) => t[0] === name);
+        if (!has("g")) out.tags.push(["g", String(geo)]);
+        if (hit.nickname && !has("n")) out.tags.push(["n", String(hit.nickname)]);
+        if (hit.clientName && !has("client")) out.tags.push(["client", String(hit.clientName)]);
+        if (hit.replyTo?.id && !has("e")) {
+          out.tags.push(["e", String(hit.replyTo.id), "", "reply"]);
+          if (hit.replyTo.pubkey) out.tags.push(["p", String(hit.replyTo.pubkey)]);
+        }
+        if (hit.imageAttachment?.url) out.tags.push(["imeta", `url ${hit.imageAttachment.url}`]);
+        if (hit.voiceMemo?.url) out.tags.push(["imeta", `url ${hit.voiceMemo.url}`, "m audio/webm"]);
+        return out;
+      }
+    }
+    let threads = [];
+    try {
+      threads = JSON.parse(localStorage.getItem("agnostr:v2:dm_threads") || "[]");
+    } catch {
+      threads = [];
+    }
+    if (Array.isArray(threads)) {
+      for (const thread of threads.slice(0, 100)) {
+        if (!thread || !Array.isArray(thread.messages)) continue;
+        const hit = thread.messages.slice(0, 5000).find((m) => m && m.id === id);
+        if (!hit) continue;
+        out.pubkey = String(hit.senderPubkey || hit.pubkey || "").toLowerCase();
+        out.created_at = Number(hit.createdAt) || Math.floor(Number(hit.orderMs || 0) / 1000);
+        out.kind = Number.isFinite(Number(hit.kind)) ? Number(hit.kind) : 4;
+        out.content = String(hit.content || "");
+        out.tags = Array.isArray(hit.tags) ? hit.tags.filter(Array.isArray).map((t) => t.map(String)) : [];
+        if (!out.tags.some((t) => t[0] === "p")) out.tags.push(["p", String(thread.peerPubkey || "")]);
+        if (hit.protocol && !out.tags.some((t) => t[0] === "t")) out.tags.push(["t", `agnostr-${hit.protocol}`]);
+        return out;
+      }
     }
     return null;
   }
@@ -463,15 +410,18 @@ import {
     state.logTimer = null;
     if (!state.logBatch.length) return;
     const batch = state.logBatch.splice(0, state.logBatch.length);
-    if (state.settings.inspector.paused) {
-      // Still keep a small history for the inspector, but don't stream to the UI.
-      state.logs.push(...batch);
-      trimLogs();
-      return;
-    }
     state.logs.push(...batch);
     trimLogs();
-    post("logs", { logs: batch.slice(-200) });
+    if (state.settings.inspector.paused) {
+      // The inspector can be paused, but incoming events must still reach the
+      // content script for chimes and the event store.
+      const incoming = batch.filter((log) => log.dir === "in" && log.event);
+      if (incoming.length) post("logs", { logs: incoming.slice(-200) });
+      return;
+    }
+    for (let i = 0; i < batch.length; i += 200) {
+      post("logs", { logs: batch.slice(i, i + 200) });
+    }
   }
 
   function trimLogs() {
@@ -501,6 +451,41 @@ import {
     if (type === "EVENT") {
       const ev = frame[2];
       if (isValidEvent(ev)) {
+        if (!state.verifiedIncoming.has(ev.id)) {
+          let valid = false;
+          try {
+            valid = verifyEvent(ev);
+          } catch {}
+          state.verifiedIncoming.add(ev.id);
+          if (state.verifiedIncoming.size > 2000) {
+            const first = state.verifiedIncoming.values().next().value;
+            if (first) state.verifiedIncoming.delete(first);
+          }
+          if (!valid) {
+            pushFrameLog({
+              dir: "in",
+              relay: url,
+              type: "INVALID_SIGNATURE",
+              eventId: ev.id,
+              kind: ev.kind,
+              summary: "incoming event failed signature verification",
+            });
+            return;
+          }
+        }
+        const calls = state.settings.privacy.calls;
+        if (calls.disable && calls.blockSignals && isCallEvent(ev)) {
+          state.callDrops += 1;
+          pushFrameLog({
+            dir: "in",
+            relay: url,
+            type: "BLOCKED_CALL",
+            eventId: ev.id,
+            kind: ev.kind,
+            summary: "incoming call signal blocked by Better Agnostr",
+          });
+          return;
+        }
         rememberEvent(ev, { dir: "in", relay: url });
         pushFrameLog({ dir: "in", relay: url, type, eventId: ev.id, kind: ev.kind, event: ev, summary: summarizeEvent(ev) });
       }
@@ -552,9 +537,11 @@ import {
     });
   }
 
+  const CALL_KINDS = new Set([25050, 25051, 25052, 25053, 25054, 25055, 25058, 25059]);
+
   function isCallEvent(ev) {
     if (!ev || typeof ev !== "object") return false;
-    if (ev.kind === 25050) return true;
+    if (CALL_KINDS.has(Number(ev.kind))) return true;
     const t = getTagValue(ev.tags, "t");
     return typeof t === "string" && t.toLowerCase().startsWith("agnostr-call");
   }
@@ -579,15 +566,8 @@ import {
     if (!Array.isArray(frame)) return { drop: false, data, translated: false };
     const calls = state.settings.privacy.calls;
     if (calls.disable && calls.blockSignals && frame[0] === "EVENT" && isCallEvent(frame[2])) {
-      state.callDrops += 1;
-      pushFrameLog({
-        dir: "in",
-        relay: "filtered",
-        type: "BLOCKED_CALL",
-        eventId: frame[2]?.id,
-        kind: frame[2]?.kind,
-        summary: "incoming call signal blocked by Better Agnostr",
-      });
+      // handleIncomingFrame logs/counts this once for every socket frame; the
+      // per-listener wrapper must only drop it here.
       return { drop: true, data, translated: false };
     }
     const translated = translateOkFrame(frame);
@@ -597,8 +577,14 @@ import {
     return { drop: false, data, translated: false };
   }
 
-  function wrapListener(fn, ws, url, seenFrames) {
-    if (typeof fn !== "function") return fn;
+  function wrapListener(listener, ws, url, seenFrames) {
+    const fn =
+      typeof listener === "function"
+        ? listener
+        : listener && typeof listener.handleEvent === "function"
+          ? listener.handleEvent.bind(listener)
+          : null;
+    if (!fn) return null;
     const wrapped = function (event) {
       let data = event?.data;
       let translated = false;
@@ -645,6 +631,7 @@ import {
     });
 
     nativeAdd.call(ws, "open", () => {
+      if (!state.active) return;
       const s = state.sockets.get(ws);
       if (s) s.status = "open";
       state.relays.set(url, { ...(state.relays.get(url) || {}), url, status: "open", lastMessageAt: Date.now(), error: "" });
@@ -652,8 +639,12 @@ import {
       publishStatus();
     });
     nativeAdd.call(ws, "close", (event) => {
-      const s = state.sockets.get(ws);
-      if (s) s.status = "closed";
+      state.sockets.delete(ws);
+      if (!state.active) return;
+      if (state.relays.size > 100) {
+        const first = state.relays.keys().next().value;
+        if (first) state.relays.delete(first);
+      }
       state.relays.set(url, {
         ...(state.relays.get(url) || {}),
         url,
@@ -664,6 +655,7 @@ import {
       publishStatus();
     });
     nativeAdd.call(ws, "error", () => {
+      if (!state.active) return;
       state.relays.set(url, { ...(state.relays.get(url) || {}), url, status: "error", error: "socket error" });
       pushFrameLog({ dir: "sys", relay: url, type: "ERROR", summary: "socket error" });
       publishStatus();
@@ -677,6 +669,7 @@ import {
       let wrapped = listenerMap.get(listener);
       if (!wrapped) {
         wrapped = wrapListener(listener, this, url, seenFrames);
+        if (!wrapped) return nativeAdd.call(this, type, listener, options);
         listenerMap.set(listener, wrapped);
       }
       return nativeAdd.call(this, type, wrapped, options);
@@ -722,16 +715,27 @@ import {
     } catch {}
   }
   window.WebSocket = BetterWebSocket;
+  // If no content script ever completes the handshake (extension disabled or
+  // not injected), do not leave the page wrapped for its whole lifetime.
+  window.setTimeout(() => {
+    if (!state.configReady && window.WebSocket === BetterWebSocket) window.WebSocket = NativeWebSocket;
+  }, 4000);
 
   function sendRaw(ws, data) {
     try {
       nativeSend.call(ws, data);
     } catch (err) {
-      pushFrameLog({ dir: "sys", relay: state.sockets.get(ws)?.url || "", type: "SEND_ERROR", summary: String(err?.message || err) });
+      if (state.active) {
+        pushFrameLog({ dir: "sys", relay: state.sockets.get(ws)?.url || "", type: "SEND_ERROR", summary: String(err?.message || err) });
+      }
     }
   }
 
   function handleSend(ws, data, url) {
+    if (!state.active) {
+      sendRaw(ws, data);
+      return;
+    }
     if (typeof data !== "string") {
       sendRaw(ws, data);
       return;
@@ -765,29 +769,10 @@ import {
       return;
     }
 
-    // Last-mile guard: if a signing path bypasses the normal prepare step and a
-    // teleport tag survives, remove it before the signed frame reaches a relay.
+    // Signed frames cannot be rewritten safely without the app's signer. The
+    // pre-sign NIP-07 adapter is the only rewrite path; if a teleport tag still
+    // reaches this point, block the event rather than re-signing it here.
     if (state.settings.privacy.omitTeleport && hasTeleportTag(ev.tags)) {
-      const cleaned = { ...ev, tags: stripTeleportTags(ev.tags) };
-      const resigned = resignEvent(cleaned);
-      if (resigned) {
-        state.aliases.set(ev.id, resigned.id);
-        state.aliasReverse.set(resigned.id, ev.id);
-        sendRaw(ws, JSON.stringify(["EVENT", resigned]));
-        rememberEvent(resigned, { dir: "out", relay: url });
-        pushFrameLog({
-          dir: "out",
-          relay: url,
-          type: "EVENT",
-          eventId: resigned.id,
-          kind: resigned.kind,
-          event: resigned,
-          aliasOf: ev.id,
-          summary: summarizeEvent(resigned),
-        });
-        post("alias", { from: ev.id, to: resigned.id });
-        return;
-      }
       pushFrameLog({
         dir: "out",
         relay: url,
@@ -801,433 +786,117 @@ import {
     }
 
     handleOutgoingFrame(data, url);
-
-    if (state.signerHooked) {
-      rememberEvent(ev, { dir: "out", relay: url });
-      sendRaw(ws, data);
-      return;
-    }
-
-    // Fallback for pages where the signer hook could not be attached. This path
-    // re-signs with the local key if possible. It can change the event id, so the
-    // alias map keeps the app's own message rows and OK responses coherent.
-    (async () => {
-      let prepared;
-      let signed = ev;
-      try {
-        prepared = await prepareOutgoing(ev, { source: "socket-fallback" });
-        if (prepared !== ev) {
-          signed = resignEvent(prepared);
-          if (signed) {
-            state.aliases.set(ev.id, signed.id);
-            state.aliasReverse.set(signed.id, ev.id);
-            sendRaw(ws, JSON.stringify(["EVENT", signed]));
-            rememberEvent(signed, { dir: "out", relay: url });
-            pushFrameLog({
-              dir: "out",
-              relay: url,
-              type: "EVENT",
-              eventId: signed.id,
-              kind: signed.kind,
-              event: signed,
-              aliasOf: ev.id,
-              summary: summarizeEvent(signed),
-            });
-            post("alias", { from: ev.id, to: signed.id });
-            return;
-          }
-        }
-      } catch (err) {
-        notice("error", "Outgoing event blocked", err instanceof Error ? err.message : String(err));
-        return;
-      }
-      sendRaw(ws, JSON.stringify(["EVENT", signed]));
-    })();
+    sendRaw(ws, data);
   }
 
   // ---------------------------------------------------------------------------
-  // Signer hook
+  // NIP-07 rewrite adapter
   // ---------------------------------------------------------------------------
+  //
+  // Better Agnostr no longer discovers or implements an Agnostr signer. The only
+  // pre-sign integration is the standard NIP-07 provider, if the page exposes one.
+  // Upstream native signer support can replace this adapter without restoring the
+  // React-fiber/local-key code that used to live here.
 
-  function objectLooksLikeIdentityManager(obj) {
-    if (!obj || typeof obj !== "object") return false;
+  function nip07Provider() {
     try {
-      return (
-        typeof obj.signEvent === "function" &&
-        typeof obj.signEventWithMaterial === "function" &&
-        typeof obj.getMasterKeyMaterial === "function"
-      );
+      const provider = window.nostr;
+      return provider && typeof provider.signEvent === "function" ? provider : null;
     } catch {
-      return false;
+      return null;
     }
   }
 
-  function deepFindIdentityManager(root, depth = 4, seen = new Set()) {
-    if (!root || (typeof root !== "object" && typeof root !== "function")) return null;
-    if (depth < 0 || seen.has(root)) return null;
-    seen.add(root);
-    if (objectLooksLikeIdentityManager(root)) return root;
-    if (root instanceof Node || root === window || root === document) return null;
-    if (root instanceof Map) {
-      let i = 0;
-      for (const value of root.values()) {
-        if (i++ > 40) break;
-        const found = deepFindIdentityManager(value, depth - 1, seen);
-        if (found) return found;
-      }
-      return null;
-    }
-    if (root instanceof Set) {
-      let i = 0;
-      for (const value of root.values()) {
-        if (i++ > 40) break;
-        const found = deepFindIdentityManager(value, depth - 1, seen);
-        if (found) return found;
-      }
-      return null;
-    }
-    let keys = [];
+  async function refreshNip07Identity(provider) {
+    if (!provider || typeof provider.getPublicKey !== "function") return;
+    const now = Date.now();
+    if (now - state.nip07IdentityAt < 30000) return;
+    state.nip07IdentityAt = now;
     try {
-      keys = Object.keys(root).slice(0, 80);
-    } catch {
-      return null;
-    }
-    for (const key of keys) {
-      if (key.startsWith("__") || key === "window" || key === "document" || key === "parent" || key === "ownerDocument") continue;
-      let value;
+      const pubkey = String((await provider.getPublicKey()) || "").trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(pubkey)) return;
+      if (pubkey === state.pubkey) return;
+      state.pubkey = pubkey;
       try {
-        value = root[key];
+        state.npub = npubEncode(pubkey);
       } catch {
-        continue;
+        state.npub = "";
       }
-      const found = deepFindIdentityManager(value, depth - 1, seen);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  function inspectFiber(fiber, seen, depth) {
-    if (!fiber || seen.has(fiber) || depth > 24) return null;
-    seen.add(fiber);
-    const props = fiber.memoizedProps;
-    if (props && typeof props === "object") {
-      for (const value of Object.values(props)) {
-        if (objectLooksLikeIdentityManager(value)) return value;
-        if (value && typeof value === "object") {
-          const nested = deepFindIdentityManager(value, 3, new Set());
-          if (nested) return nested;
-        }
-      }
-    }
-    const stateNode = fiber.stateNode;
-    if (stateNode && typeof stateNode === "object") {
-      if (objectLooksLikeIdentityManager(stateNode)) return stateNode;
-      const nested = deepFindIdentityManager(stateNode, 3, new Set());
-      if (nested) return nested;
-    }
-    let hook = fiber.memoizedState;
-    let guard = 0;
-    while (hook && guard < 80) {
-      guard += 1;
-      const value = hook.memoizedState;
-      const found = deepFindIdentityManager(value, 5, new Set());
-      if (found) return found;
-      hook = hook.next;
-    }
-    const child = inspectFiber(fiber.child, seen, depth + 1);
-    if (child) return child;
-    return inspectFiber(fiber.sibling, seen, depth + 1);
-  }
-
-  function findIdentityManager() {
-    if (state.signerInstance && objectLooksLikeIdentityManager(state.signerInstance)) return state.signerInstance;
-    const containers = [];
-    const root = document.getElementById("root");
-    if (root) containers.push(root);
-    const nodes = document.querySelectorAll("body > div, body > main");
-    for (const n of nodes) {
-      if (containers.length > 6) break;
-      containers.push(n);
-    }
-    for (const container of containers) {
-      try {
-        const keys = Object.keys(container);
-        for (const key of keys) {
-          if (key.startsWith("__reactContainer$")) {
-            const found = inspectFiber(container[key], new Set(), 0);
-            if (found) return found;
-          }
-          if (key.startsWith("__reactFiber$")) {
-            let f = container[key];
-            let guard = 0;
-            while (f && guard++ < 200) {
-              if (f.return === null) {
-                const found = inspectFiber(f, new Set(), 0);
-                if (found) return found;
-              }
-              f = f.return;
-            }
-          }
-        }
-      } catch {}
-    }
-    return null;
-  }
-
-  function objectLooksLikeAppContext(obj) {
-    if (!obj || typeof obj !== "object") return false;
-    try {
-      return typeof obj.sendReaction === "function" && (Array.isArray(obj.messages) || !!obj.servers);
-    } catch {
-      return false;
-    }
-  }
-
-  function deepFindAppContext(root, depth = 4, seen = new Set()) {
-    if (!root || (typeof root !== "object" && typeof root !== "function")) return null;
-    if (depth < 0 || seen.has(root)) return null;
-    seen.add(root);
-    if (objectLooksLikeAppContext(root)) return root;
-    if (root instanceof Node || root === window || root === document) return null;
-    if (root instanceof Map) {
-      let i = 0;
-      for (const value of root.values()) {
-        if (i++ > 40) break;
-        const found = deepFindAppContext(value, depth - 1, seen);
-        if (found) return found;
-      }
-      return null;
-    }
-    if (root instanceof Set) {
-      let i = 0;
-      for (const value of root.values()) {
-        if (i++ > 40) break;
-        const found = deepFindAppContext(value, depth - 1, seen);
-        if (found) return found;
-      }
-      return null;
-    }
-    let keys = [];
-    try {
-      keys = Object.keys(root).slice(0, 80);
-    } catch {
-      return null;
-    }
-    for (const key of keys) {
-      if (key.startsWith("__") || key === "window" || key === "document" || key === "parent" || key === "ownerDocument") continue;
-      let value;
-      try {
-        value = root[key];
-      } catch {
-        continue;
-      }
-      const found = deepFindAppContext(value, depth - 1, seen);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  function inspectFiberForApp(fiber, seen, depth) {
-    if (!fiber || seen.has(fiber) || depth > 24) return null;
-    seen.add(fiber);
-    const props = fiber.memoizedProps;
-    if (props && typeof props === "object") {
-      for (const value of Object.values(props)) {
-        if (objectLooksLikeAppContext(value)) return value;
-        if (value && typeof value === "object") {
-          const nested = deepFindAppContext(value, 4, new Set());
-          if (nested) return nested;
-        }
-      }
-    }
-    const stateNode = fiber.stateNode;
-    if (stateNode && typeof stateNode === "object") {
-      if (objectLooksLikeAppContext(stateNode)) return stateNode;
-      const nested = deepFindAppContext(stateNode, 4, new Set());
-      if (nested) return nested;
-    }
-    let hook = fiber.memoizedState;
-    let guard = 0;
-    while (hook && guard < 80) {
-      guard += 1;
-      const value = hook.memoizedState;
-      const found = deepFindAppContext(value, 5, new Set());
-      if (found) return found;
-      hook = hook.next;
-    }
-    const child = inspectFiberForApp(fiber.child, seen, depth + 1);
-    if (child) return child;
-    return inspectFiberForApp(fiber.sibling, seen, depth + 1);
-  }
-
-  function findAppContext() {
-    const containers = [];
-    const root = document.getElementById("root");
-    if (root) containers.push(root);
-    const nodes = document.querySelectorAll("body > div, body > main");
-    for (const n of nodes) {
-      if (containers.length > 6) break;
-      containers.push(n);
-    }
-    for (const container of containers) {
-      try {
-        for (const key of Object.keys(container)) {
-          if (key.startsWith("__reactContainer$")) {
-            const found = inspectFiberForApp(container[key], new Set(), 0);
-            if (found) return found;
-          }
-          if (key.startsWith("__reactFiber$")) {
-            let f = container[key];
-            let guard = 0;
-            while (f && guard++ < 200) {
-              if (f.return === null) {
-                const found = inspectFiberForApp(f, new Set(), 0);
-                if (found) return found;
-              }
-              f = f.return;
-            }
-          }
-        }
-      } catch {}
-    }
-    return null;
-  }
-
-  function findInspectPeerFn() {
-    const containers = [];
-    const root = document.getElementById("root");
-    if (root) containers.push(root);
-    for (const n of document.querySelectorAll("body > div, body > main")) {
-      if (containers.length > 6) break;
-      containers.push(n);
-    }
-    const search = (fiber, seen, depth) => {
-      if (!fiber || seen.has(fiber) || depth > 26) return null;
-      seen.add(fiber);
-      const props = fiber.memoizedProps;
-      if (props && typeof props === "object") {
-        if (typeof props.onInspectPeer === "function") return props.onInspectPeer;
-        if (typeof props.onInspectAuthor === "function") return props.onInspectAuthor;
-        if (typeof props.onInspectSender === "function") return props.onInspectSender;
-      }
-      return search(fiber.child, seen, depth + 1) || search(fiber.sibling, seen, depth + 1);
-    };
-    for (const container of containers) {
-      try {
-        for (const key of Object.keys(container)) {
-          if (key.startsWith("__reactContainer$")) {
-            const found = search(container[key], new Set(), 0);
-            if (found) return found;
-          }
-          if (key.startsWith("__reactFiber$")) {
-            let f = container[key];
-            let guard = 0;
-            while (f && guard++ < 200) {
-              if (f.return === null) {
-                const found = search(f, new Set(), 0);
-                if (found) return found;
-              }
-              f = f.return;
-            }
-          }
-        }
-      } catch {}
-    }
-    return null;
-  }
-
-  function currentSignMode(instance) {
-    if (instance?.getSignMode) {
-      try {
-        return instance.getSignMode();
-      } catch {}
-    }
-    try {
-      const raw = localStorage.getItem("agnostr:v2:sign_mode");
-      if (raw === "auto" || raw === "local" || raw === "extension") return raw;
+      publishStatus();
     } catch {}
-    return "auto";
   }
 
-  function signerPubkey(instance) {
-    try {
-      const material = instance?.getMasterKeyMaterial?.();
-      return material?.pubkey || "";
-    } catch {
-      return "";
-    }
-  }
-
-  function patchIdentityManager(instance) {
-    if (!instance) return false;
-    const proto = Object.getPrototypeOf(instance);
-    if (!proto || typeof proto.signEventWithMaterial !== "function") return false;
-    state.signerInstance = instance;
-    state.signMode = currentSignMode(instance);
-    state.pubkey = signerPubkey(instance);
-    try {
-      state.npub = state.pubkey ? npubEncode(state.pubkey) : "";
-    } catch {
-      state.npub = "";
-    }
-    if (proto.__baBetterAgnostrPatched) {
-      state.signerHooked = true;
-      publishStatus();
-      return true;
-    }
-    const original = proto.signEventWithMaterial;
-    try {
-      Object.defineProperty(proto, "__baBetterAgnostrPatched", {
-        value: true,
-        configurable: true,
-        enumerable: false,
-      });
-      proto.signEventWithMaterial = async function (event, material) {
-        const prepared = await prepareOutgoing(event, { source: "signer" });
-        const signed = await original.call(this, prepared, material);
-        if (isValidEvent(signed)) rememberEvent(signed, { dir: "signed", relay: "signer" });
-        return signed;
-      };
-      state.signerHooked = true;
-      publishStatus();
-      notice("success", "Signer attached", "Outgoing event tools are active.");
-      return true;
-    } catch (err) {
-      notice("warning", "Could not attach to signer", err instanceof Error ? err.message : String(err));
-      return false;
-    }
+  function clearNip07Identity() {
+    state.nip07IdentityAt = 0;
+    if (!state.pubkey && !state.npub) return;
+    state.pubkey = "";
+    state.npub = "";
+    publishStatus();
   }
 
   function patchNip07() {
-    if (!window.nostr || typeof window.nostr.signEvent !== "function") return false;
-    if (window.nostr.__baBetterAgnostrPatched) return true;
-    const original = window.nostr.signEvent;
+    const provider = nip07Provider();
+    if (!provider) {
+      clearNip07Identity();
+      if (state.nip07Patched || state.signMode !== "none") {
+        state.nip07Patched = false;
+        state.signMode = "none";
+        publishStatus();
+      }
+      return false;
+    }
+    if (state.nip07Provider !== provider) {
+      state.nip07Provider = provider;
+      state.nip07IdentityAt = 0;
+      state.pubkey = "";
+      state.npub = "";
+    }
+    state.nip07Patched = true;
+    state.signMode = "nip-07";
+    void refreshNip07Identity(provider);
+    // A provider can be replaced by another extension after our wrapper lands.
+    // Keep one wrapper per provider object and re-install it when a page swaps
+    // the function out.
+    const original = provider.signEvent;
+    const existing = nip07Wrappers.get(provider);
+    if (existing && existing.original === original && provider.signEvent === existing.wrapped) return true;
+    const wrapped = async function (...args) {
+      const prepared = await prepareOutgoing(args[0], { source: "nip07" });
+      args[0] = prepared;
+      return original.apply(this, args);
+    };
     try {
-      Object.defineProperty(window.nostr, "__baBetterAgnostrPatched", { value: true, configurable: true });
-      window.nostr.signEvent = async function (event) {
-        const prepared = await prepareOutgoing(event, { source: "nip07" });
-        return original.call(this, prepared);
-      };
-      state.nip07Patched = true;
+      provider.signEvent = wrapped;
+      nip07Wrappers.set(provider, { original, wrapped });
       publishStatus();
       return true;
     } catch {
+      state.nip07Patched = false;
+      state.signMode = "none";
+      publishStatus();
       return false;
     }
   }
 
-  function scanSigner() {
-    if (!state.signerHooked) {
-      const found = findIdentityManager();
-      if (found) patchIdentityManager(found);
+  function unpatchNip07() {
+    const provider = nip07Provider();
+    const record = provider ? nip07Wrappers.get(provider) : null;
+    if (provider && record && provider.signEvent === record.wrapped) {
+      try {
+        provider.signEvent = record.original;
+      } catch {}
     }
-    patchNip07();
+    if (provider) nip07Wrappers.delete(provider);
+    state.nip07Provider = null;
+    state.nip07Patched = false;
+    state.signMode = "none";
+    clearNip07Identity();
   }
 
-  function startSignerWatch() {
-    if (state.signerScanTimer !== null) return;
-    state.signerScanTimer = window.setInterval(scanSigner, state.signerHooked ? 5000 : 900);
-    scanSigner();
+  function startNip07Watch() {
+    if (state.nip07Timer !== null) return;
+    state.nip07Timer = window.setInterval(patchNip07, 2000);
+    patchNip07();
   }
 
   // ---------------------------------------------------------------------------
@@ -1239,14 +908,12 @@ import {
   }
 
   function markPrepared(ev) {
-    try {
-      Object.defineProperty(ev, "__baPrepared", { value: true, enumerable: false, configurable: true });
-    } catch {}
+    if (ev && typeof ev === "object") preparedEvents.add(ev);
     return ev;
   }
 
   function isPrepared(ev) {
-    return !!ev && ev.__baPrepared === true;
+    return !!ev && typeof ev === "object" && preparedEvents.has(ev);
   }
 
   async function ensureBuild(force = false) {
@@ -1254,15 +921,20 @@ import {
     if (manual) return manual;
     const cached = state.settings.glub.build;
     const age = Date.now() - Number(state.settings.glub.buildFetchedAt || 0);
-    if (!force && cached && age < 2 * 60 * 1000) return cached;
+    if (!force && cached && !state.buildStale && age < 2 * 60 * 1000) return cached;
     if (state.buildPromise) return state.buildPromise;
     state.buildRequestedAt = Date.now();
     state.buildPromise = (async () => {
       const res = await askUi("build", { force, current: cached }, 4500);
       if (res && res.build) {
+        state.buildStale = !!res.stale;
         state.settings.glub.build = String(res.build);
         state.settings.glub.buildFetchedAt = Number(res.fetchedAt) || Date.now();
         publishStatus();
+        if (res.stale) {
+          notice("warning", "Glub build is stale", "glub.chat could not be refreshed; metadata was not added so the message is not rejected by glub.chat.");
+          return "";
+        }
         return state.settings.glub.build;
       }
       if (res?.error) notice("warning", "Glub build sync failed", String(res.error));
@@ -1296,7 +968,7 @@ import {
     let policy = policyForKind(settings, ev.kind);
     if (settings.privacy.stripTags.includes("client")) policy = "strip";
     if (policy === "leave") return;
-    if (policy === "spoof" && !settings.client.name.trim()) return;
+    if (policy === "spoof" && !settings.client.name.trim()) policy = "strip";
     if (
       policy === "spoof" &&
       settings.client.name.trim().toLowerCase() === "glub.chat" &&
@@ -1324,9 +996,21 @@ import {
 
   function applyTrackingStrip(ev) {
     if (!state.settings.privacy.stripTracking) return;
-    if (typeof ev.content !== "string" || !ev.content) return;
-    if (!/https?:\/\//i.test(ev.content)) return;
-    ev.content = stripTrackingParams(ev.content);
+    // Encrypted and protocol events can contain opaque URL-looking bytes. Only
+    // rewrite human-readable chat/note payloads.
+    if (!CHAT_KINDS.has(ev.kind) && !NOTE_KINDS.has(ev.kind)) return;
+    if (typeof ev.content === "string" && /https?:\/\//i.test(ev.content)) {
+      ev.content = stripTrackingParams(ev.content);
+    }
+    if (Array.isArray(ev.tags)) {
+      ev.tags = ev.tags.map((tag) =>
+        Array.isArray(tag)
+          ? tag.map((value) =>
+              typeof value === "string" && /https?:\/\//i.test(value) ? stripTrackingParams(value) : value,
+            )
+          : tag,
+      );
+    }
   }
 
   async function applyGlub(ev, group) {
@@ -1336,43 +1020,55 @@ import {
       groupPolicy === "spoof" &&
       settings.client.name.trim().toLowerCase() === "glub.chat" &&
       !settings.privacy.stripTags.includes("client");
-    if (!CHAT_KINDS.has(ev.kind) && !NOTE_KINDS.has(ev.kind) && group !== "chat" && !wantsGlubClient) return;
+    if (!CHAT_KINDS.has(ev.kind) && !NOTE_KINDS.has(ev.kind) && group !== "chat") return;
     const existing = parseGlubMeta(ev.tags);
     const isChat = group === "chat" && ev.kind !== 20001;
-    let rich = typeof existing.rich === "string" ? existing.rich : "";
-    let fmt = typeof existing.fmt === "string" ? sanitizeTemplate(existing.fmt) : "";
-    let flair = typeof existing.flair === "string" && isValidFlair(existing.flair) ? existing.flair : "";
+    let rich = typeof existing.rich === "string" && existing.rich.length <= RICH_MAX ? existing.rich : "";
+    if (rich && state.settings.privacy.stripTracking) rich = stripTrackingParams(rich);
+    let fmt = typeof existing.fmt === "string" ? normalizeTemplate(existing.fmt) : "";
+    let flair = flairName(existing.flair);
 
+    let richSource = "";
+    let stripCodes = false;
     if (settings.studio.applyRich && typeof ev.content === "string" && hasFormat(ev.content)) {
-      const stripped = stripFormat(ev.content);
-      if (ev.content.length <= RICH_MAX) {
-        rich = ev.content;
-        ev.content = stripped;
-      } else {
-        ev.content = stripped;
-        rich = "";
-        notice("warning", "Formatting skipped", "The message is too long for glub rich formatting; codes were removed.");
+      if (ev.content.length <= RICH_MAX) richSource = ev.content;
+      else {
+        stripCodes = true;
+        notice("warning", "Formatting skipped", "The message is too long for glub rich formatting; formatting codes will be removed only if metadata can be attached.");
       }
     }
 
     if (settings.studio.enabled && isChat) {
-      const tpl = sanitizeTemplate(settings.studio.template);
+      const tpl = normalizeTemplate(settings.studio.template);
       if (tpl) fmt = tpl;
-      if (settings.studio.flair && isValidFlair(settings.studio.flair)) flair = settings.studio.flair;
+      if (settings.studio.flair) flair = flairName(settings.studio.flair) || flair;
     }
 
-    const needsGlub = !!(rich || fmt || flair);
+    const needsGlub = !!(rich || richSource || stripCodes || fmt || flair);
     if (!needsGlub && !wantsGlubClient) return;
 
     const build = await ensureBuild();
-    ev.tags = removeTagsByName(ev.tags, new Set(["glub"]));
     if (!build) {
+      // Keep any existing metadata and formatting codes instead of deleting them
+      // before we know whether a replacement can be built.
       notice("warning", "Glub metadata skipped", "No live glub.chat build stamp is available yet. The message will still send, but glub.chat users will see plain text.");
       return;
     }
-    const tag = buildGlubTag({ rich, fmt, flair }, build);
-    if (tag) ev.tags.push(tag);
-    else if (wantsGlubClient) ev.tags.push(["glub", "v", build]);
+    const tag = buildGlubTag({ rich: richSource || rich, fmt, flair }, build);
+    if (tag) {
+      rich = richSource || rich;
+      if (richSource) ev.content = stripFormat(richSource);
+      else if (stripCodes) ev.content = stripFormat(ev.content);
+      ev.tags = removeTagsByName(ev.tags, new Set(["glub"]));
+      ev.tags.push(tag);
+    } else if (wantsGlubClient) {
+      ev.tags = removeTagsByName(ev.tags, new Set(["glub"]));
+      ev.tags.push(["glub", "v", build]);
+    } else if (stripCodes) {
+      // No metadata could be attached; keep the original codes so the message
+      // does not lose formatting for no reason.
+      notice("warning", "Formatting kept", "The message is too long for glub rich formatting; codes were left in place.");
+    }
   }
 
   async function prepareOutgoing(original, opts = {}) {
@@ -1380,10 +1076,8 @@ import {
     if (!state.active) return original;
     if (isPrepared(original)) return original;
     await waitForConfig();
+    if (!state.active) throw new Error("Better Agnostr is disabled.");
     const settings = state.settings;
-    if (!settings.studio.enabled && !settings.privacy.reviewEnabled && !settings.privacy.stripTracking) {
-      // Still allow client spoofing even when the studio is off.
-    }
     const ev = {
       kind: original.kind,
       created_at: original.created_at,
@@ -1411,12 +1105,17 @@ import {
           original: cloneEventForStorage(original),
           proposed: cloneEventForStorage(ev),
           group,
-          source: opts.source || "signer",
+          source: opts.source || "provider",
         },
         180000,
       );
       if (!decision || decision.action !== "send") {
         throw new Error("Outgoing event cancelled in the Better Agnostr review dialog.");
+      }
+      if (Array.isArray(decision.stripTagIndexes) && decision.stripTagIndexes.length) {
+        const strip = new Set(decision.stripTagIndexes.map(Number).filter(Number.isInteger));
+        const critical = new Set(["g", "d", "e", "p", "k", "h", "a", "q"]);
+        ev.tags = ev.tags.filter((tag, index) => !strip.has(index) || critical.has(tag?.[0]));
       }
       if (Array.isArray(decision.stripTags) && decision.stripTags.length) {
         const strip = new Set(decision.stripTags);
@@ -1425,103 +1124,11 @@ import {
       }
     }
 
+    if (!state.active) throw new Error("Better Agnostr was disabled while preparing the event.");
     state.preparedCount += 1;
     // A new object, so the caller can't mutate our copy; mark it so nested hooks
     // (NIP-07 wrapper inside the signer hook) do not prepare it twice.
     return markPrepared(ev);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Local key fallback signing
-  // ---------------------------------------------------------------------------
-
-  function readJson(key, fallback) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch {
-      return fallback;
-    }
-  }
-
-  function secretFromRaw(raw) {
-    if (!raw || typeof raw !== "string") return null;
-    const trimmed = raw.trim();
-    try {
-      if (trimmed.toLowerCase().startsWith("nsec1")) {
-        const decoded = decode(trimmed);
-        return decoded?.type === "nsec" && decoded.data instanceof Uint8Array ? decoded.data : null;
-      }
-      if (/^[0-9a-f]{64}$/i.test(trimmed)) {
-        const bytes = hexToBytes(trimmed.toLowerCase());
-        getPublicKey(bytes);
-        return bytes;
-      }
-    } catch {}
-    return null;
-  }
-
-  function localKeys() {
-    const signModeRaw = localStorage.getItem("agnostr:v2:sign_mode");
-    const signMode = signModeRaw === "local" || signModeRaw === "extension" || signModeRaw === "auto" ? signModeRaw : "auto";
-    const settings = readJson("agnostr:v2:settings", {});
-    const perGeohashIdentity = !!settings.perGeohashIdentity;
-    let master = null;
-    if (signMode === "local") {
-      master = secretFromRaw(localStorage.getItem("agnostr:v2:local_secret") || "");
-    } else if (signMode === "auto") {
-      master = secretFromRaw(localStorage.getItem("agnostr:v2:device_seed") || "");
-    }
-    return { signMode, perGeohashIdentity, master };
-  }
-
-  function deriveGeohashSecret(seed, geohash) {
-    const normalized = String(geohash || "").trim().replace(/^#+/, "").toLowerCase();
-    const geo = utf8ToBytes(normalized);
-    for (let counter = 0; counter < 10; counter++) {
-      const info = new Uint8Array(geo.length + 4);
-      info.set(geo, 0);
-      new DataView(info.buffer).setUint32(geo.length, counter, false);
-      const candidate = hmac(sha256, seed, info);
-      try {
-        getPublicKey(candidate);
-        return candidate;
-      } catch {}
-    }
-    return sha256(concatBytes(seed, geo));
-  }
-
-  function keyForEvent(ev) {
-    const { signMode, perGeohashIdentity, master } = localKeys();
-    if (signMode === "extension" || !master) return null;
-    const geohash = getTagValue(ev.tags, "g");
-    if (signMode === "auto" && perGeohashIdentity && geohash) {
-      const derived = deriveGeohashSecret(master, geohash);
-      try {
-        if (getPublicKey(derived) === ev.pubkey) return derived;
-      } catch {}
-    }
-    try {
-      if (getPublicKey(master) === ev.pubkey) return master;
-    } catch {}
-    return null;
-  }
-
-  function resignEvent(ev) {
-    if (!ev || typeof ev !== "object") return null;
-    const key = keyForEvent(ev);
-    if (!key) return null;
-    try {
-      const unsigned = {
-        kind: ev.kind,
-        created_at: ev.created_at || Math.floor(Date.now() / 1000),
-        tags: cloneTags(ev.tags),
-        content: ev.content,
-      };
-      return finalizeEvent(unsigned, key);
-    } catch {
-      return null;
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1539,7 +1146,6 @@ import {
       nickname = localStorage.getItem("agnostr:v2:nickname") || "";
     } catch {}
     post("status", {
-      signerHooked: state.signerHooked,
       nip07Patched: state.nip07Patched,
       signMode: state.signMode,
       pubkey: state.pubkey,
@@ -1577,10 +1183,13 @@ import {
       window.clearInterval(state.statusTimer);
       state.statusTimer = null;
     }
-    if (state.signerScanTimer !== null) {
-      window.clearInterval(state.signerScanTimer);
-      state.signerScanTimer = null;
+    if (state.nip07Timer !== null) {
+      window.clearInterval(state.nip07Timer);
+      state.nip07Timer = null;
     }
+    unpatchNip07();
+    for (const resolve of state.pending.values()) resolve(null);
+    state.pending.clear();
     state.callObserver?.disconnect();
     state.callObserver = null;
     state.started = false;
@@ -1589,7 +1198,7 @@ import {
   function start() {
     if (state.started || !state.active) return;
     state.started = true;
-    startSignerWatch();
+    startNip07Watch();
     if (state.statusTimer === null) {
       state.statusTimer = window.setInterval(publishStatus, 2500);
     }
@@ -1600,19 +1209,4 @@ import {
     publishStatus();
   }
 
-  // Expose a tiny diagnostic object for the console and for the UI's help tab.
-  try {
-    Object.defineProperty(window, "__betterAgnostr", {
-      value: {
-        state,
-        findIdentityManager,
-        findAppContext,
-        findInspectPeerFn,
-        prepareOutgoing,
-        ensureBuild,
-        reconstructEvent,
-      },
-      configurable: true,
-    });
-  } catch {}
 })();

@@ -20,22 +20,6 @@ export const FLAIRS = ["fire", "lightning", "stars", "rain", "plume", "neon", "m
 
 const KNOWN = new Set(FLAIRS);
 
-// --- flairs that are not for everybody -------------------------------------------
-//
-// A gated flair is one only a glub.chat nip-05 holder may wear. The check lives with
-// the READER, not with the sender: nothing stops another client stamping any string it
-// likes into a glub tag, so "is this person entitled to this" has to be answered where
-// the line is drawn, by whoever is drawing it.
-//
-// This is a whitelist of NAMES rather than a flag on each flair, because the question
-// "which flairs are gated" gets asked from three places - the picker, the send path and
-// the renderer - and one list they all read cannot drift the way three booleans would.
-const GATED = new Set(["sol"]);
-
-export function flairIsGated(raw) {
-	return GATED.has(flairName(raw));
-}
-
 // How many of THIS flair may animate on screen at once. 0 = no limit.
 //
 // The flairs are nowhere near equally expensive, so one global cap is the wrong

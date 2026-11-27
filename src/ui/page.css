@@ -101,6 +101,7 @@
 .ba-fmt-obf {
   animation: ba-obf-flicker 1.1s steps(2, end) infinite;
 }
+.fmtObf[data-obf-static="1"] { animation: none !important; }
 @keyframes ba-obf-flicker {
   0%, 100% { opacity: 1; }
   48% { opacity: 1; }
@@ -147,6 +148,10 @@
 }
 .ag-msg-head .ba-better-name::after { transform: translateY(-1px); }
 .ag-peer-modal-name.ba-better-name::after { margin-left: 6px; }
+
+html[data-ba-theme] .ag-set-theme-grid:not(.ba-glub-theme-grid) .ag-set-theme-check {
+  display: none !important;
+}
 
 .ag-peer-client-pill.ba-client-pill-unknown {
   color: var(--text-secondary);
@@ -1287,8 +1292,8 @@ html.ba-hide-locate button[title^="Locate" i] {
   z-index: 120000;
   display: flex;
   flex-direction: column;
-  width: 300px;
-  max-height: 300px;
+  width: min(300px, calc(100dvw - 20px));
+  max-height: min(300px, calc(100dvh - 20px));
   overflow: hidden;
   padding: 6px;
   border: 1px solid var(--border-default);
@@ -1412,28 +1417,33 @@ html.ba-hide-timestamps .ag-msg-row .ag-msg-gutter-time {
   display: none !important;
 }
 
-html.ba-hide-notification-button .ag-notification-shortcut {
+html.ba-hide-notification-button .ag-notification-shortcut,
+html.ba-hide-notification-button [aria-label="Notification options"],
+html.ba-hide-notification-button .ag-rail-app-tile:has(svg.lucide-bell),
+html.ba-hide-notification-button .ag-mtab-btn[aria-label*="Notification" i] {
   display: none !important;
 }
 
 /* Agnostr now places the message action toolbar in the row's flex flow next to
    the text. Restore the previous fixed top-right overlay so it does not move with
    message width, wrapping, or avatars. */
-.ag-msg-row > .ag-msg-actions {
-  position: absolute;
-  top: -13px;
-  right: 20px;
-  bottom: auto;
-  left: auto;
-  flex: none;
-  block-size: auto;
-  margin: 0;
-  align-self: auto;
+html.ba-active .ag-msg-row > .ag-msg-actions,
+html.ba-active .ag-msg-row > .ag-msg-content > .ag-msg-actions {
+  position: absolute !important;
+  top: -13px !important;
+  inset-inline-end: 20px !important;
+  bottom: auto !important;
+  inset-inline-start: auto !important;
+  flex: none !important;
+  block-size: auto !important;
+  margin: 0 !important;
+  align-self: auto !important;
 }
 
 @media (max-width: 867px) {
-  .ag-msg-row > .ag-msg-actions {
-    top: -16px;
-    right: 12px;
+  html.ba-active .ag-msg-row > .ag-msg-actions,
+  html.ba-active .ag-msg-row > .ag-msg-content > .ag-msg-actions {
+    top: -16px !important;
+    inset-inline-end: 12px !important;
   }
 }

@@ -28,14 +28,15 @@
 
 # Better Agnostr
 
-A browser extension for **agnostr.com**: line and flair studio, client tags, privacy tools, Better Agnostr sounds, themes, and a JSON event viewer. Everything runs locally; no servers and no keys leave the browser.
+A browser extension for **agnostr.com**: line and flair studio, client tags, privacy tools, Better Agnostr sounds, themes, and a JSON event viewer. Settings, events, and keys stay local. The only automatic request is the public glub.chat build stamp; a custom font URL you enter can make its own request.
 
 ## Features
 
 - Line templates, `&` colour codes, rich text, and 14 flair effects.
 - Glub/Bright rainbow toggle in Appearance.
-- Client-tag leave/spoof/strip policies and profile client pills.
+- Client-tag leave/spoof/strip policies and profile client pills when a NIP-07 provider is available.
 - Privacy scrubber, review-before-sign, teleport/timestamp/voice-memo hiding, and call blocking.
+- No built-in signer and no React-internal signer discovery. Outgoing rewrites use the page's standard NIP-07 provider only.
 - 12 Better Agnostr chimes, UI clicks, volume, and chime triggers.
 - JSON event viewer with tags, signatures, relay frames, and Glub previews.
 - 12 Glub themes, custom CSS, and bundled fonts.
@@ -45,7 +46,7 @@ A browser extension for **agnostr.com**: line and flair studio, client tags, pri
 
 1. Run `npm install` and `node build.mjs`.
 2. Firefox: open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → select `dist/manifest.json`.
-3. Chromium 148+: open `chrome://extensions`, enable **Developer mode**, and load `release/better-agnostr-1.2.2-chromium.zip` unpacked.
+3. Chromium 148+: open `chrome://extensions`, enable **Developer mode**, and load `release/better-agnostr-1.3.0-chromium.zip` unpacked.
 4. Open or reload <https://agnostr.com/>.
 
 Firefox 128 or newer is required. The unsigned XPI is in `release/`; permanent Firefox installation requires AMO signing.
@@ -64,13 +65,15 @@ Open **Agnostr Settings → Better Agnostr**. On mobile: **Apps → Settings**.
 - **Privacy & Trust → Better Agnostr:** tag scrubbing, review before signing, Locate Me, timestamps, teleport, voice memos, and calls.
 - **Notifications:** native notification controls plus Better Agnostr chimes and clicks. The new Alerts shortcut opens the same pane with those controls inline.
 
-Outgoing chat events are rewritten **before signing**, so signatures stay valid. Sealed DM and mesh events cannot be rewritten.
+Outgoing chat events are rewritten **before signing** when the page exposes a standard `window.nostr` NIP-07 provider, so signatures stay valid. Better Agnostr no longer implements or discovers Agnostr's internal signer; with a native signer and no NIP-07 provider, client-tag, template, tracking, tag, and review transforms stay inactive until Agnostr exposes a supported signing hook. Sealed DM and mesh events are never rewritten.
 
 ## Build
 
 ```bash
 npm install
+npm test
+npm run lint
 node build.mjs
 ```
 
-Source lives in `src/`; the build writes `dist/` and the versioned ZIP/XPI.
+Source lives in `src/`; the build writes `dist/` and the versioned ZIP/XPI. The build refuses to package when `package.json` and `src/manifest.json` versions differ.

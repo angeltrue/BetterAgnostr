@@ -1,5 +1,9 @@
 // Glub.chat wire compatibility helpers.
 //
+// Aliases are resolved by glub-flair.js; importing that pure registry here keeps
+// saved/received legacy names valid without duplicating the table.
+import { flairName } from "./glub-flair.js";
+
 // Glub stores its own metadata in a single `glub` tag with key/value pairs:
 //   ["glub", "rich", "...", "fmt", "...", "flair", "...", "v", "<build>"]
 //
@@ -122,6 +126,16 @@ export function tokenize(raw) {
   let i = 0;
   while (i < s.length) {
     const ch = s[i];
+    // A URL is plain text, not a formatting run. Without this, `&l`, `&g`, etc.
+    // inside query strings are consumed as Minecraft codes and silently deleted.
+    if ((ch === "h" || ch === "H") && /^https?:\/\//i.test(s.slice(i))) {
+      const url = s.slice(i).match(/^https?:\/\/[^\s<>]+/i);
+      if (url) {
+        text += url[0];
+        i += url[0].length;
+        continue;
+      }
+    }
     if (ch === "&" && i + 1 < s.length) {
       const next = s[i + 1];
       if (next === "&") {
@@ -252,7 +266,8 @@ function linkify(text) {
 
 /**
  * Turn raw &-coded text into safe HTML.
- * bodyFn receives already-escaped plaintext and must return safe HTML.
+ * bodyFn receives raw token text and must return safe HTML. The default
+ * richText() performs the single escaping pass.
  */
 export function renderFormatHtml(raw, { bodyFn = richText } = {}) {
   let state = { ...BLANK };
@@ -262,7 +277,9 @@ export function renderFormatHtml(raw, { bodyFn = richText } = {}) {
       state = applyCode(state, tok.c);
       continue;
     }
-    const inner = bodyFn(escapeHtml(tok.v));
+    // bodyFn owns escaping. Passing an already-escaped string here made the
+    // default richText() escape it a second time and display literal entities.
+    const inner = bodyFn(tok.v);
     const style = stateStyle(state);
     const cls = stateClass(state);
     if (!style && !cls) {
@@ -283,7 +300,9 @@ export function sanitizeTemplate(raw) {
 export function normalizeTemplate(raw) {
   const tpl = sanitizeTemplate(raw);
   if (!tpl) return "";
-  return tpl.includes("{msg}") ? tpl : `${tpl} {msg}`;
+  if (tpl.includes("{msg}")) return tpl;
+  const room = Math.max(0, FMT_MAX - 6);
+  return `${tpl.slice(0, room).trimEnd()} {msg}`;
 }
 
 export function renderLineHtml(template, { name = "you", tag = "#a1b2", msgHtml = "hello", msgText = "" } = {}) {
@@ -357,7 +376,7 @@ export function flairMeta(name) {
 }
 
 export function isValidFlair(name) {
-  return FLAIR_NAMES.has(name);
+  return !!flairName(name);
 }
 
 export function randomTag(pubkey = "") {
@@ -407,8 +426,12 @@ const TRACKING_PARAMS = new Set([
   "igshid",
   "mc_cid",
   "mc_eid",
+  "ref",
   "ref_src",
   "ref_url",
+  "source",
+  "gbraid",
+  "wbraid",
   "vero_id",
   "oly_anon_id",
   "oly_enc_id",
@@ -429,7 +452,10 @@ export function stripTrackingParams(text) {
           changed = true;
         }
       }
-      return changed ? u.toString() : url;
+      if (!changed) return url;
+      const base = url.split("#")[0].split("?")[0];
+      const query = u.searchParams.toString();
+      return `${base}${query ? `?${query}` : ""}${u.hash}`;
     } catch {
       return url;
     }
