@@ -2,6 +2,20 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.4.0 — performance release
+
+- Incoming relay events are now signature-verified only when they can trigger a notification (chat, mentions, DMs, calls). Everything else is verified on demand in the event viewer, removing Schnorr verification from the bulk relay hot path.
+- Relay bridge logs are compact: full event objects are sent only for alert events, outgoing events keep their IDs, and a small peer summary preserves BA plaques without cloning full tags/content. The viewer fetches a full event when it opens one.
+- Relay frames are parsed once per `MessageEvent` and cached. Non-EVENT/OK frames skip the call-blocking/OK-translation parser entirely.
+- The page observer now watches child-list changes document-wide and class changes only on the message-row container, instead of every class mutation in the whole app.
+- Chat-label observation is attached only to the rail, header, drawer, settings, sheet, popover and toast roots. Body-wide text and attribute observation is gone.
+- Message decoration uses a dirty-row set instead of re-checking every row on every enhance pass, with a slow safety sweep.
+- Flair joins recompute only when flair rows are added/removed/resized or settings change. CSS variables and join attributes are written only when their values differ.
+- Star-band density is cached by row height, and flaired rows use `ResizeObserver`/`IntersectionObserver` instead of global measurement on every tick.
+- Status messages are diffed and paused while the tab is hidden. Call-menu policy runs only when a context menu is added, and call/locate scans are scoped to actual controls.
+- Obfuscation timer reduced from 10 Hz to 4 Hz; flair ticker reduced from 1.5 s to 1.8 s. Flair, rain, signer and all 1.3.x behavior remain intact.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.10 — performance hotfix
 
 - Removed the full-document Bitchat text sweep from every enhance pass. Chat labels are now handled by the targeted mutation adapter and a one-time startup pass.

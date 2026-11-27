@@ -242,6 +242,7 @@ const state = {
   decoratedRows: new Set(),
   richApplied: new WeakMap(),
   betterPeers: new Map(),
+  betterHandles: new Map(),
   peerClients: new Map(),
   emojiCategory: "smileys",
   lastBetterClients: 0,
@@ -251,6 +252,20 @@ const state = {
   callMaintenanceTimer: null,
   lastFlairJoinAt: 0,
   flairJoinTimer: null,
+  flairJoinDirty: true,
+  flairResizeObserver: null,
+  flairIntersection: null,
+  visibleFlairRows: new Set(),
+  starBandHeights: new WeakMap(),
+  dirtyRows: new Set(),
+  rowsAllDirty: true,
+  rowsSweptOnce: false,
+  lastRowsSweep: 0,
+  rowObserver: null,
+  rowObserverRoot: null,
+  lastRowObserverProbe: 0,
+  chatLabelRoots: null,
+  chatLabelBodyObserver: null,
   settingsEpoch: 0,
   fontCssSignature: "",
   enhancePending: false,
@@ -340,7 +355,7 @@ function tickObfuscation() {
   if (now >= state.obfNextScan) {
     state.obfCache = [...document.querySelectorAll(".fmtObf")];
     if (state.shadow) state.obfCache.push(...state.shadow.querySelectorAll(".fmtObf"));
-    state.obfNextScan = now + 1200;
+    state.obfNextScan = now + (state.obfCache.length ? 1200 : 5000);
   }
   const els = state.obfCache.filter((el) => el.isConnected);
   state.obfCache = els;
@@ -489,6 +504,8 @@ function updateSettings(mutator, { broadcast = true, sync = true } = {}) {
   state.settingsEpoch += 1;
   state.lastBetterClients = 0;
   state.lastCallMaintenance = 0;
+  markRowsAllDirty();
+  markFlairJoinsDirty();
   debounceSave();
   if (broadcast) broadcastConfig();
   if (sync) {
@@ -587,6 +604,12 @@ function handlePageMessage(event) {
   handlePageData(data);
 }
 
+function rememberRecentPayload(payload) {
+  if (!payload) return;
+  for (const peer of payload.peers || []) rememberPeerSummary(peer);
+  for (const ev of payload.events || []) rememberEvent(ev);
+}
+
 function handlePageData(data) {
   if (!data.token || data.token !== state.pageToken) return;
   if (!state.enabledReady || state.settings.enabled === false) return;
@@ -603,8 +626,8 @@ function handlePageData(data) {
       state.pageReady = true;
       sendPage("config", { settings: state.settings });
       askPage("getRecent", { limit: 300 }).then((res) => {
-        if (res?.events) {
-          for (const ev of res.events) rememberEvent(ev);
+        if (res) {
+          rememberRecentPayload(res);
           scheduleEnhance();
           renderRelaySoon();
         }
@@ -621,6 +644,8 @@ function handlePageData(data) {
         previous.nip07Patched !== state.status.nip07Patched ||
         previous.eventCount !== state.status.eventCount
       ) {
+        markRowsAllDirty();
+        markFlairJoinsDirty();
         scheduleEnhance();
       }
       if (state.status.build) {
@@ -644,8 +669,7 @@ function handlePageData(data) {
       break;
     }
     case "recent": {
-      const events = data.payload?.events || [];
-      for (const ev of events) rememberEvent(ev);
+      rememberRecentPayload(data.payload);
       scheduleEnhance();
       renderRelaySoon();
       break;
@@ -741,6 +765,60 @@ function isValidEventShape(ev) {
   );
 }
 
+function setBetterPeer(pubkey, handle) {
+  const previous = state.betterPeers.get(pubkey);
+  if (previous === handle) return false;
+  if (previous) state.betterHandles.delete(previous);
+  state.betterPeers.set(pubkey, handle);
+  state.betterHandles.set(handle, pubkey);
+  while (state.betterPeers.size > 2000) {
+    const first = state.betterPeers.keys().next().value;
+    if (!first) break;
+    const oldHandle = state.betterPeers.get(first);
+    state.betterPeers.delete(first);
+    if (oldHandle && state.betterHandles.get(oldHandle) === first) state.betterHandles.delete(oldHandle);
+  }
+  return true;
+}
+
+function forgetBetterPeer(pubkey) {
+  const handle = state.betterPeers.get(pubkey);
+  if (!handle) return false;
+  state.betterPeers.delete(pubkey);
+  if (state.betterHandles.get(handle) === pubkey) state.betterHandles.delete(handle);
+  return true;
+}
+
+function rememberPeerSummary(peer) {
+  if (!peer || typeof peer !== "object") return false;
+  const pubkey = String(peer.pubkey || "").toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(pubkey)) return false;
+  const name = String(peer.name || "").trim();
+  const handle = name
+    ? `@${name.toLowerCase()}#${pubkey.slice(-4)}`
+    : `@agnon${pubkey.slice(-4)}#${pubkey.slice(-4)}`;
+  const client = String(peer.client || "").trim();
+  let changed = false;
+  if (isBetterClientName(client)) {
+    if (setBetterPeer(pubkey, handle)) changed = true;
+  } else if (client && forgetBetterPeer(pubkey)) {
+    changed = true;
+  }
+  if (client) {
+    const at = Number(peer.at) || 0;
+    const previous = state.peerClients.get(pubkey);
+    if (!previous || at >= previous.at) {
+      if (!previous || previous.name !== client) changed = true;
+      state.peerClients.set(pubkey, { name: client, at });
+    }
+    if (state.peerClients.size > 2000) {
+      const first = state.peerClients.keys().next().value;
+      if (first) state.peerClients.delete(first);
+    }
+  }
+  return changed;
+}
+
 function rememberEvent(ev) {
   if (!isValidEventShape(ev)) return false;
   const existing = state.events.get(ev.id);
@@ -753,24 +831,16 @@ function rememberEvent(ev) {
     changed = true;
   }
   if (ev.pubkey && Array.isArray(ev.tags)) {
-    const pubkey = String(ev.pubkey).toLowerCase();
-    if (isBetterClient(ev)) {
-      state.betterPeers.set(pubkey, eventHandle(ev));
-      if (state.betterPeers.size > 2000) {
-        const first = state.betterPeers.keys().next().value;
-        if (first) state.betterPeers.delete(first);
-      }
-    }
-    const client = String(getTagValue(ev.tags, "client") || "").trim();
-    if (client) {
-      const at = Number(ev.created_at) || 0;
-      const previous = state.peerClients.get(pubkey);
-      if (!previous || at >= previous.at) state.peerClients.set(pubkey, { name: client, at });
-      if (state.peerClients.size > 2000) {
-        const first = state.peerClients.keys().next().value;
-        if (first) state.peerClients.delete(first);
-      }
-    }
+    rememberPeerSummary({
+      pubkey: ev.pubkey,
+      name: getTagValue(ev.tags, "n"),
+      client: getTagValue(ev.tags, "client"),
+      at: ev.created_at,
+    });
+  }
+  if (changed) {
+    const row = document.getElementById(`msg-${ev.id}`);
+    if (row) markRowDirty(row);
   }
   // Bound memory.
   const cap = Math.max(100, Math.min(5000, Number(state.settings.inspector?.maxEvents) || 1500));
@@ -791,14 +861,14 @@ function eventById(id) {
 
 function appendLogs(logs) {
   if (!Array.isArray(logs) || !logs.length) return;
-  const internalKinds = new Set([25050, 25051, 25052, 25053, 25054, 25055, 25058, 25059, 30078]);
   let changed = false;
   for (const log of logs) {
     if (!log || typeof log !== "object") continue;
+    if (log.peer && rememberPeerSummary(log.peer)) changed = true;
     if (log.event && rememberEvent(log.event)) changed = true;
     if (log.dir === "out" && log.eventId) {
       state.ownEventIds.add(log.eventId);
-      if (!internalKinds.has(log.kind)) state.lastOutgoingId = log.eventId;
+      if (!INTERNAL_EVENT_KINDS.has(log.kind)) state.lastOutgoingId = log.eventId;
     }
     if (log.dir === "in" && log.event && isValidEventShape(log.event)) handleIncomingAlert(log.event);
   }
@@ -1182,7 +1252,10 @@ function applyCallCss() {
 
 function markLocateButtons() {
   const hide = state.settings.privacy.hideLocate !== false;
-  for (const btn of document.querySelectorAll("button")) {
+  const buttons = document.querySelectorAll(
+    'button[aria-label*="locate" i], button[title*="locate" i], .ag-composer-dock button, .ag-header button',
+  );
+  for (const btn of buttons) {
     if (!(btn instanceof HTMLElement)) continue;
     const label = `${btn.textContent || ""} ${btn.getAttribute("aria-label") || ""} ${btn.title || ""}`;
     if (/locate me|locate my area/i.test(label)) {
@@ -1208,6 +1281,7 @@ function removeCallMenuItems() {
     }
     return;
   }
+  if (!document.querySelector(".ag-ctx-menu")) return;
   for (const label of document.querySelectorAll(".ag-ctx-item-label")) {
     if (!isCallControlText(label.textContent)) continue;
     const item = label.closest(".ag-ctx-item");
@@ -1252,7 +1326,11 @@ function hideCallUi() {
 function applyCallButtons() {
   const calls = state.settings.privacy.calls;
   const blocked = !!calls.disable;
-  for (const btn of document.querySelectorAll("button")) {
+  if (!blocked && !document.querySelector("[data-ba-call-hidden], [data-ba-call-disabled]")) return;
+  const buttons = document.querySelectorAll(
+    ".ag-composer-dock button, .ag-header button, .ag-sheet button, .ag-ctx-item",
+  );
+  for (const btn of buttons) {
     if (btn.closest(".ag-settings-modal")) continue;
     const text = `${btn.textContent || ""} ${btn.getAttribute("aria-label") || ""} ${btn.title || ""}`.replace(/\s+/g, " ").trim();
     if (!isCallControlText(text)) continue;
@@ -1571,6 +1649,12 @@ function syncBetterSettings(modal) {
 }
 
 function scheduleSettingsSync() {
+  if (!document.querySelector(".ag-settings-modal")) {
+    state.settingsModalOpen = false;
+    state.settingsBetterActive = false;
+    state.aboutActive = false;
+    return;
+  }
   if (state.settingsTimer !== null) return;
   state.settingsTimer = window.setTimeout(() => {
     state.settingsTimer = null;
@@ -2154,8 +2238,61 @@ function shootStar(el, delay = 0) {
   anim.oncancel = () => star.remove();
 }
 
+function ensureFlairObservers() {
+  if (!state.flairIntersection && typeof window.IntersectionObserver === "function") {
+    state.flairIntersection = new window.IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) state.visibleFlairRows.add(entry.target);
+          else state.visibleFlairRows.delete(entry.target);
+        }
+      },
+      { rootMargin: "120px 0px" },
+    );
+  }
+  if (!state.flairResizeObserver && typeof window.ResizeObserver === "function") {
+    state.flairResizeObserver = new window.ResizeObserver((entries) => {
+      let changed = false;
+      for (const entry of entries) {
+        const row = entry.target;
+        if (!(row instanceof HTMLElement) || !row.isConnected) {
+          unobserveFlairRow(row);
+          continue;
+        }
+        markFlairJoinsDirty();
+        if (row.dataset.baFlair === "stars") syncStarBandDensity(row);
+        changed = true;
+      }
+      if (changed) scheduleEnhance();
+    });
+  }
+}
+
+function observeFlairRow(row) {
+  if (!(row instanceof HTMLElement)) return;
+  ensureFlairObservers();
+  state.flairIntersection?.observe(row);
+  state.flairResizeObserver?.observe(row);
+}
+
+function unobserveFlairRow(row) {
+  if (!(row instanceof HTMLElement)) return;
+  state.flairIntersection?.unobserve(row);
+  state.flairResizeObserver?.unobserve(row);
+  state.visibleFlairRows.delete(row);
+  state.starBandHeights.delete(row);
+}
+
 function visibleFxTargets(selector) {
   const out = [];
+  if (state.flairIntersection) {
+    for (const row of state.visibleFlairRows) {
+      if (!row.isConnected || row.classList.contains("flairQuiet")) continue;
+      const el = row.querySelector(selector);
+      if (el) out.push(el);
+    }
+    return out;
+  }
   for (const el of document.querySelectorAll(selector)) {
     const row = el.parentElement;
     if (!row || row.classList.contains("flairQuiet")) continue;
@@ -2587,7 +2724,10 @@ document.addEventListener(
     if (logRow) {
       event.preventDefault();
       const log = state.logs[Number(logRow.getAttribute("data-ba-log-index"))];
-      if (log?.eventId) openViewer(log.eventId, log.event ? "json" : "relay");
+      if (log?.eventId) {
+        const eventFrame = log.type === "EVENT" || log.type === "INVALID_SIGNATURE" || log.type === "BLOCKED_CALL";
+        openViewer(log.eventId, log.event || eventFrame ? "json" : "relay");
+      }
       return;
     }
 
@@ -3588,8 +3728,8 @@ function openBetterSettings(tab = "line") {
   const age = Date.now() - Number(state.settings.glub.buildFetchedAt || 0);
   if (!state.settings.glub.build || age > 2 * 60 * 1000) refreshBuild(false);
   askPage("getRecent", { limit: 300 }).then((res) => {
-    if (res?.events) {
-      for (const ev of res.events) rememberEvent(ev);
+    if (res) {
+      rememberRecentPayload(res);
       scheduleEnhance();
       scheduleSettingsSync();
     }
@@ -3738,7 +3878,9 @@ function chatLabel(value) {
 }
 
 function removeTransientNativeToasts() {
-  for (const toast of document.querySelectorAll(".ag-toast")) {
+  const toasts = document.querySelectorAll(".ag-toast");
+  if (!toasts.length) return;
+  for (const toast of toasts) {
     const title = toast.querySelector(".ag-toast-title")?.textContent || "";
     const detail = toast.querySelector(".ag-toast-detail")?.textContent || "";
     const callsBlocked = !!state.settings.privacy.calls.disable;
@@ -3813,13 +3955,13 @@ function replaceChatTitle() {
 }
 
 
-function observeChatLabels() {
-  if (typeof MutationObserver !== "function" || !document.body) return;
+function observeChatLabelRoot(root) {
+  if (!(root instanceof Element)) return;
+  if (!state.chatLabelRoots) state.chatLabelRoots = new WeakMap();
+  if (state.chatLabelRoots.has(root)) return;
   const observer = new MutationObserver((records) => {
     for (const record of records) {
       if (record.type === "characterData") {
-        const parent = record.target.parentElement;
-        if (!parent || !parent.closest(CHAT_LABEL_CONTEXT)) continue;
         if (CHAT_LABEL_RE.test(record.target.nodeValue || "")) {
           CHAT_LABEL_RE.lastIndex = 0;
           replaceChatLabelsIn(record.target);
@@ -3830,7 +3972,7 @@ function observeChatLabels() {
       }
       if (record.type === "attributes") {
         const el = record.target;
-        if (!(el instanceof Element) || !el.closest(CHAT_LABEL_CONTEXT)) continue;
+        if (!(el instanceof Element)) continue;
         const value = el.getAttribute(record.attributeName || "");
         if (value && CHAT_LABEL_RE.test(value)) {
           CHAT_LABEL_RE.lastIndex = 0;
@@ -3843,23 +3985,21 @@ function observeChatLabels() {
       for (const node of record.addedNodes) {
         if (node.nodeType === Node.TEXT_NODE) {
           const parent = node.parentElement;
-          if (!parent || !parent.closest(CHAT_LABEL_CONTEXT) || parent.closest(".ag-msg-row")) continue;
+          if (!parent || parent.closest(CHAT_LABEL_BLOCKED)) continue;
           if (CHAT_LABEL_RE.test(node.nodeValue || "")) {
             CHAT_LABEL_RE.lastIndex = 0;
             replaceChatLabelsIn(node);
-              return;
+            return;
           }
           CHAT_LABEL_RE.lastIndex = 0;
           continue;
         }
-        if (!(node instanceof Element)) continue;
-        if (node.closest(".ag-msg-row")) continue;
-        const inContext =
-          node.matches(CHAT_LABEL_CONTEXT) ||
-          !!node.closest(CHAT_LABEL_CONTEXT) ||
-          !!node.querySelector(CHAT_LABEL_CONTEXT);
-        if (!inContext) continue;
-        if (CHAT_LABEL_RE.test(node.textContent || "") || CHAT_LABEL_RE.test(node.getAttribute("aria-label") || "") || CHAT_LABEL_RE.test(node.getAttribute("title") || "")) {
+        if (!(node instanceof Element) || node.closest(".ag-msg-row")) continue;
+        if (
+          CHAT_LABEL_RE.test(node.textContent || "") ||
+          CHAT_LABEL_RE.test(node.getAttribute("aria-label") || "") ||
+          CHAT_LABEL_RE.test(node.getAttribute("title") || "")
+        ) {
           CHAT_LABEL_RE.lastIndex = 0;
           replaceChatLabelsIn(node);
           return;
@@ -3868,29 +4008,67 @@ function observeChatLabels() {
       }
     }
   });
-  observer.observe(document.body, {
+  observer.observe(root, {
     childList: true,
     subtree: true,
     characterData: true,
     attributes: true,
     attributeFilter: ["aria-label", "title", "placeholder", "alt"],
   });
+  state.chatLabelRoots.set(root, observer);
+}
+
+function observeChatLabelRoots(scope) {
+  if (!(scope instanceof Element)) return;
+  if (scope.matches(CHAT_LABEL_CONTEXT)) observeChatLabelRoot(scope);
+  for (const root of scope.querySelectorAll(CHAT_LABEL_CONTEXT)) observeChatLabelRoot(root);
+}
+
+function observeChatLabels() {
+  if (typeof MutationObserver !== "function" || !document.body) return;
+  observeChatLabelRoots(document.body);
+  // Only structural changes are watched document-wide. Text and attribute
+  // mutations are observed on the small UI roots that can contain a Chat label,
+  // not on the message stream, composer, or the rest of the application.
+  state.chatLabelBodyObserver = new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (node.closest(".ag-msg-row")) continue;
+        observeChatLabelRoots(node);
+        const root = node.closest(CHAT_LABEL_CONTEXT);
+        if (!root || node.closest(CHAT_LABEL_BLOCKED)) continue;
+        if (
+          CHAT_LABEL_RE.test(node.textContent || "") ||
+          CHAT_LABEL_RE.test(node.getAttribute("aria-label") || "") ||
+          CHAT_LABEL_RE.test(node.getAttribute("title") || "")
+        ) {
+          CHAT_LABEL_RE.lastIndex = 0;
+          replaceChatLabelsIn(node);
+          return;
+        }
+        CHAT_LABEL_RE.lastIndex = 0;
+      }
+    }
+  });
+  state.chatLabelBodyObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 function maintainCallControls() {
   if (!state.enabledReady || state.settings.enabled === false) return;
   const now = Date.now();
   const elapsed = now - (state.lastCallMaintenance || 0);
-  if (elapsed < 2000) {
+  if (elapsed < 4000) {
     if (state.callMaintenanceTimer === null) {
       state.callMaintenanceTimer = window.setTimeout(() => {
         state.callMaintenanceTimer = null;
         maintainCallControls();
-      }, 2000 - elapsed + 20);
+      }, 4000 - elapsed + 20);
     }
     return;
   }
   state.lastCallMaintenance = now;
+  if (!state.settings.privacy.calls.disable && !document.querySelector("[data-ba-call-hidden], [data-ba-call-disabled]")) return;
   applyCallButtons();
   hideCallUi();
   markLocateButtons();
@@ -3905,6 +4083,9 @@ function enhanceAll() {
   }
   const observer = state.pageObserver;
   observer?.disconnect();
+  state.rowObserver?.disconnect();
+  state.rowObserverRoot = null;
+  state.lastRowObserverProbe = 0;
   try {
     // Native channel/context menus are sensitive to DOM churn. While one is open,
     // only finish the message-action menu and let the rest wait until it closes.
@@ -3981,6 +4162,7 @@ function ensureSuiteBetter() {
 
 function ensureSuiteButton() {
   const footer = document.querySelector(".ag-suite-footer");
+  if (!footer) return;
   for (const btn of document.querySelectorAll(".ag-suite-util-btn")) {
     if (btn.hasAttribute("data-ba-suite-better")) continue;
     const text = (btn.textContent || "").trim();
@@ -4080,7 +4262,9 @@ function insertEmoji(emoji) {
 }
 
 function ensureComposerEmoji() {
-  for (const right of document.querySelectorAll(".ag-composer-right")) {
+  const rights = document.querySelectorAll(".ag-composer-right");
+  if (!rights.length) return;
+  for (const right of rights) {
     if (right.querySelector("[data-ba-emoji-trigger='composer']")) continue;
     const button = document.createElement("button");
     button.type = "button";
@@ -4096,11 +4280,16 @@ function ensureComposerEmoji() {
   }
 }
 
-function applyVoiceMemoVisibility() {
+function applyVoiceMemoVisibility(docks) {
   const remove = state.settings.privacy.removeVoiceMemo !== false;
-  for (const btn of document.querySelectorAll(
-    '.ag-composer-dock button[aria-label*="voice memo" i], .ag-composer-dock button[title*="voice memo" i]',
-  )) {
+  const buttons = docks
+    ? [...docks].flatMap((dock) =>
+        dock.querySelectorAll('button[aria-label*="voice memo" i], button[title*="voice memo" i]'),
+      )
+    : document.querySelectorAll(
+        '.ag-composer-dock button[aria-label*="voice memo" i], .ag-composer-dock button[title*="voice memo" i]',
+      );
+  for (const btn of buttons) {
     if (!(btn instanceof HTMLElement)) continue;
     if (remove) {
       if (btn.dataset.baVoiceHidden !== "1") {
@@ -4139,8 +4328,10 @@ function composerToolbarHtml() {
 }
 
 function ensureToolbars() {
-  applyVoiceMemoVisibility();
-  for (const dock of document.querySelectorAll(".ag-composer-dock")) {
+  const docks = document.querySelectorAll(".ag-composer-dock");
+  if (!docks.length) return;
+  applyVoiceMemoVisibility(docks);
+  for (const dock of docks) {
     for (const old of dock.querySelectorAll(":scope > .ba-composer-bar")) old.remove();
     let head = dock.querySelector(":scope > .ba-composer-head");
     if (!head || !head.querySelector(".ba-composer-bar")) {
@@ -4236,7 +4427,7 @@ function repairRowNow(row) {
     ensureRowButtons(row, id);
     markRowClientLabels(row, ev);
     decorateRow(row, ev);
-    updateFlairJoins();
+    markFlairJoinsDirty();
     const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
     row.dataset.baDecorated = `${id}:${state.settingsEpoch}:${ownPubkey}`;
   } finally {
@@ -4248,8 +4439,21 @@ function repairRowNow(row) {
   return true;
 }
 
+function setRowStyleVar(row, prop, value) {
+  if (row.style.getPropertyValue(prop) !== value) row.style.setProperty(prop, value);
+}
+
+function removeRowStyleVar(row, prop) {
+  if (row.style.getPropertyValue(prop)) row.style.removeProperty(prop);
+}
+
 function updateFlairJoins() {
   if (!state.enabledReady || state.settings.enabled === false) return;
+  if (!state.flairJoinDirty) return;
+  if (!document.querySelector(".ag-msg-row[data-ba-flair]")) {
+    state.flairJoinDirty = false;
+    return;
+  }
   const now = performance.now();
   const elapsed = now - (state.lastFlairJoinAt || 0);
   if (elapsed < 250) {
@@ -4262,6 +4466,7 @@ function updateFlairJoins() {
     return;
   }
   state.lastFlairJoinAt = now;
+  state.flairJoinDirty = false;
   const rectCache = new Map();
   const rectOf = (el) => {
     if (!(el instanceof HTMLElement)) return null;
@@ -4285,45 +4490,40 @@ function updateFlairJoins() {
       next instanceof HTMLElement &&
       next.classList.contains("ag-msg-row") &&
       next.dataset.baFlair === flair;
-    if (flair === "neon" && topJoin) {
+    if (topJoin && (flair === "neon" || flair === "rain" || flair === "aurora")) {
       try {
-        const saved = JSON.parse(row.dataset.baFlairVars || "{}");
-        for (const key of ["--neon-lit", "--neon-halo"]) {
-          const value = prev.style.getPropertyValue(key);
-          if (!value) continue;
-          row.style.setProperty(key, value);
-          saved[key] = value;
-        }
-        row.dataset.baFlairVars = JSON.stringify(saved);
-      } catch {}
-    }
-    if (topJoin && (flair === "rain" || flair === "aurora")) {
-      try {
-        const prefix = flair === "rain" ? "--rain-" : "--aur-";
+        const keys = flair === "neon" ? ["--neon-lit", "--neon-halo"] : null;
+        const prefix = flair === "rain" ? "--rain-" : flair === "aurora" ? "--aur-" : "";
         const saved = JSON.parse(row.dataset.baFlairVars || "{}");
         const source = JSON.parse(prev.dataset.baFlairVars || "{}");
+        let changed = false;
         for (const [key, value] of Object.entries(source)) {
-          if (!key.startsWith(prefix)) continue;
-          row.style.setProperty(key, String(value));
-          saved[key] = value;
+          if (keys && !keys.includes(key)) continue;
+          if (!keys && !key.startsWith(prefix)) continue;
+          const nextValue = String(value);
+          if (row.style.getPropertyValue(key) !== nextValue) row.style.setProperty(key, nextValue);
+          if (saved[key] !== nextValue) {
+            saved[key] = nextValue;
+            changed = true;
+          }
         }
-        row.dataset.baFlairVars = JSON.stringify(saved);
+        if (changed) row.dataset.baFlairVars = JSON.stringify(saved);
       } catch {}
     }
     if (flair === "stars") syncStarBandDensity(row);
     const topGap = topJoin ? Math.min(16, Math.max(0, rectOf(row).top - rectOf(prev).bottom)) : 0;
     const bottomGap = bottomJoin ? Math.min(16, Math.max(0, rectOf(next).top - rectOf(row).bottom)) : 0;
-    row.toggleAttribute("data-ba-flair-join-top", topJoin);
-    row.toggleAttribute("data-ba-flair-join-bottom", bottomJoin);
-    if (topJoin) row.style.setProperty("--ba-flair-bleed-top", `${Math.round(topGap)}px`);
-    else row.style.removeProperty("--ba-flair-bleed-top");
-    if (bottomJoin) row.style.setProperty("--ba-flair-bleed-bottom", `${Math.round(bottomGap)}px`);
-    else row.style.removeProperty("--ba-flair-bleed-bottom");
+    if (row.hasAttribute("data-ba-flair-join-top") !== topJoin) row.toggleAttribute("data-ba-flair-join-top", topJoin);
+    if (row.hasAttribute("data-ba-flair-join-bottom") !== bottomJoin) row.toggleAttribute("data-ba-flair-join-bottom", bottomJoin);
+    if (topJoin) setRowStyleVar(row, "--ba-flair-bleed-top", `${Math.round(topGap)}px`);
+    else removeRowStyleVar(row, "--ba-flair-bleed-top");
+    if (bottomJoin) setRowStyleVar(row, "--ba-flair-bleed-bottom", `${Math.round(bottomGap)}px`);
+    else removeRowStyleVar(row, "--ba-flair-bleed-bottom");
     if (flair === "rain") {
       const extra = bottomJoin ? Math.max(0, rectOf(next).bottom - rectOf(row).bottom) : 0;
-      row.style.setProperty("--rain-drop-extra", `${Math.round(extra)}px`);
+      setRowStyleVar(row, "--rain-drop-extra", `${Math.round(extra)}px`);
     } else {
-      row.style.removeProperty("--rain-drop-extra");
+      removeRowStyleVar(row, "--rain-drop-extra");
     }
   }
   // A row that lost its flair must not keep stale join styling.
@@ -4332,9 +4532,9 @@ function updateFlairJoins() {
     row.removeAttribute("data-ba-flair-join-top");
     row.removeAttribute("data-ba-flair-join-bottom");
     if (row instanceof HTMLElement) {
-      row.style.removeProperty("--ba-flair-bleed-top");
-      row.style.removeProperty("--ba-flair-bleed-bottom");
-      row.style.removeProperty("--rain-drop-extra");
+      removeRowStyleVar(row, "--ba-flair-bleed-top");
+      removeRowStyleVar(row, "--ba-flair-bleed-bottom");
+      removeRowStyleVar(row, "--rain-drop-extra");
     }
   }
 }
@@ -4344,40 +4544,74 @@ function syncStarBandDensity(row) {
   const fx = row.querySelector(":scope > .flairFx");
   if (!fx) return;
   const height = row.getBoundingClientRect().height;
+  if (state.starBandHeights.get(row) === height) return;
+  state.starBandHeights.set(row, height);
   const count = height < 64 ? 1 : height < 100 ? 2 : height < 150 ? 3 : height < 220 ? 4 : 6;
   [...fx.querySelectorAll(".starBand")].forEach((band, index) => {
-    band.style.display = index < count ? "" : "none";
+    const display = index < count ? "" : "none";
+    if (band.style.display !== display) band.style.display = display;
   });
 }
 
-function decorateRows() {
-  const rows = document.querySelectorAll(".ag-msg-row");
-  for (const row of rows) {
-    if (!(row instanceof HTMLElement)) continue;
-    if (row.classList.contains("is-system")) continue;
-    const id = row.id?.startsWith("msg-") ? row.id.slice(4) : "";
-    if (!id) continue;
-    ensureRowButtons(row, id);
-    const ev = eventById(id);
-    if (!ev) {
-      if (!state.pendingLookups.has(id) && state.pageReady) {
-        state.pendingLookups.add(id);
-        askPage("getEvent", { id }, 5000).then((res) => {
-          state.pendingLookups.delete(id);
-          if (res?.event) {
-            rememberEvent(res.event);
-            scheduleEnhance();
-          }
-        });
-      }
-      continue;
+function markRowDirty(row) {
+  if (row instanceof HTMLElement) state.dirtyRows.add(row);
+}
+
+function markRowsAllDirty() {
+  state.rowsAllDirty = true;
+}
+
+function markFlairJoinsDirty() {
+  state.flairJoinDirty = true;
+}
+
+function decorateRowElement(row) {
+  if (!(row instanceof HTMLElement)) return;
+  if (row.classList.contains("is-system")) return;
+  const id = row.id?.startsWith("msg-") ? row.id.slice(4) : "";
+  if (!id) return;
+  ensureRowButtons(row, id);
+  const ev = eventById(id);
+  if (!ev) {
+    if (!state.pendingLookups.has(id) && state.pageReady) {
+      state.pendingLookups.add(id);
+      askPage("getEvent", { id }, 5000).then((res) => {
+        state.pendingLookups.delete(id);
+        if (res?.event) {
+          rememberEvent(res.event);
+          markRowDirty(row);
+          scheduleEnhance();
+        }
+      });
     }
-    const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
-    const signature = `${id}:${state.settingsEpoch}:${ownPubkey}`;
-    if (row.dataset.baDecorated === signature && rowDecorationIntact(row, ev)) continue;
-    markRowClientLabels(row, ev);
-    decorateRow(row, ev);
-    row.dataset.baDecorated = signature;
+    return;
+  }
+  const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
+  const signature = `${id}:${state.settingsEpoch}:${ownPubkey}`;
+  if (row.dataset.baDecorated === signature && rowDecorationIntact(row, ev)) return;
+  markRowClientLabels(row, ev);
+  decorateRow(row, ev);
+  row.dataset.baDecorated = signature;
+}
+
+function decorateRows() {
+  const now = performance.now();
+  const fullSweep =
+    state.rowsAllDirty ||
+    !state.rowsSweptOnce ||
+    now - state.lastRowsSweep > 15000;
+  if (fullSweep) {
+    state.rowsAllDirty = false;
+    state.rowsSweptOnce = true;
+    state.lastRowsSweep = now;
+    state.dirtyRows.clear();
+    for (const row of document.querySelectorAll(".ag-msg-row")) decorateRowElement(row);
+  } else {
+    const rows = [...state.dirtyRows];
+    state.dirtyRows.clear();
+    for (const row of rows) {
+      if (row.isConnected) decorateRowElement(row);
+    }
   }
   updateFlairJoins();
 }
@@ -4433,14 +4667,10 @@ function ownBetterClient() {
 function textWithoutClientBadge(el) {
   if (!(el instanceof HTMLElement)) return "";
   let out = "";
-  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      return node.parentElement?.closest(".ba-client-badge")
-        ? NodeFilter.FILTER_REJECT
-        : NodeFilter.FILTER_ACCEPT;
-    },
-  });
-  while (walker.nextNode()) out += walker.currentNode.nodeValue || "";
+  for (const child of el.childNodes) {
+    if (child instanceof Element && child.classList.contains("ba-client-badge")) continue;
+    out += child.textContent || "";
+  }
   return out.replace(/\s+/g, " ").trim();
 }
 
@@ -4466,13 +4696,11 @@ function setBetterName(el, show) {
 function knownBetterHandle(handle) {
   const value = String(handle || "").trim().toLowerCase();
   if (!value) return false;
-  for (const [pubkey, known] of state.betterPeers) {
-    if (known.toLowerCase() !== value) continue;
-    // A peer who once used Better Agnostr but now sends from another client is
-    // not a BA user on that event. Only the latest client tag decides the plaque.
-    return isBetterClientName(state.peerClients.get(pubkey)?.name);
-  }
-  return false;
+  const pubkey = state.betterHandles.get(value);
+  if (!pubkey) return false;
+  // A peer who once used Better Agnostr but now sends from another client is
+  // not a BA user on that event. Only the latest client tag decides the plaque.
+  return isBetterClientName(state.peerClients.get(pubkey)?.name);
 }
 
 function markRowClientLabels(row, ev) {
@@ -4563,6 +4791,7 @@ function repairPeopleBadges() {
 
 function markBetterClients(force = false) {
   if (!state.enabledReady || state.settings.enabled === false) return;
+  if (!document.querySelector(".ag-users-row, .ag-peer-modal, .ag-quick-profile-popover, .ag-sheet-hero-title")) return;
   const now = Date.now();
   const elapsed = now - (state.lastBetterClients || 0);
   if (!force && elapsed < 1500) {
@@ -4614,7 +4843,9 @@ function markBetterClients(force = false) {
 }
 
 function hideSelfTeleportBadges() {
-  for (const modal of document.querySelectorAll(".ag-peer-modal")) {
+  const modals = document.querySelectorAll(".ag-peer-modal");
+  if (!modals.length) return;
+  for (const modal of modals) {
     const badges = modal.querySelector(".ag-peer-modal-badges");
     if (!badges) continue;
     const isSelf = [...badges.querySelectorAll(".ag-badge")].some(
@@ -4657,7 +4888,7 @@ function decorateRow(row, ev) {
   const ownPubkey = String(state.status?.pubkey || "").toLowerCase();
   const ownMessage = !!ev.pubkey && String(ev.pubkey).toLowerCase() === ownPubkey;
   const better = isBetterClient(ev) || (ownMessage && ownBetterClient());
-  if (better && ev.pubkey) state.betterPeers.set(ev.pubkey.toLowerCase(), eventHandle(ev));
+  if (better && ev.pubkey) setBetterPeer(ev.pubkey.toLowerCase(), eventHandle(ev));
 
   if (hasGlub && state.settings.studio.renderInAgnostr && meta.flair && isValidFlair(meta.flair)) {
     applyFlair(row, ev, meta.flair);
@@ -4829,6 +5060,14 @@ function applyLineStyles(row, meta) {
 }
 
 function clearFlair(row) {
+  unobserveFlairRow(row);
+  state.starBandHeights.delete(row);
+  markFlairJoinsDirty();
+  row.removeAttribute("data-ba-flair-join-top");
+  row.removeAttribute("data-ba-flair-join-bottom");
+  removeRowStyleVar(row, "--ba-flair-bleed-top");
+  removeRowStyleVar(row, "--ba-flair-bleed-bottom");
+  removeRowStyleVar(row, "--rain-drop-extra");
   row.classList.remove("flair", "ba-flair", "flairQuiet", "ba-flair-static");
   for (const cls of [...row.classList]) {
     if (cls.startsWith("ba-flair-") || cls.startsWith("flair-")) row.classList.remove(cls);
@@ -4846,6 +5085,7 @@ function flairStyleVars(vars) {
 }
 
 function applyFlair(row, ev, flair) {
+  markFlairJoinsDirty();
   flair = flairName(flair);
   if (!flair) {
     clearFlair(row);
@@ -4906,6 +5146,7 @@ function applyFlair(row, ev, flair) {
     wrap.after(fx);
     if (flair === "stars") syncStarBandDensity(row);
   }
+  observeFlairRow(row);
 }
 
 function cleanupRichObservers() {
@@ -5893,121 +6134,166 @@ function copyDiagnostics() {
 // DOM observation
 // ---------------------------------------------------------------------------
 
-function observePage() {
-  const relevantSelector = [
-    ".ag-msg-row",
-    ".ag-msg-actions",
-    ".ag-msg-head",
-    ".ag-app-rail",
-    ".ag-bitchat-drawer",
-    ".ag-bitchat-quickbar",
-    ".ag-bitchat-globe-stage",
-    ".ag-suite-footer",
-    ".ag-toast-stack",
-    ".ag-toast",
-    ".ag-rail-srv",
-    ".ag-srv-mobile-rail",
-    ".ag-mobile-tabbar",
-    ".ag-composer-dock",
-    ".ag-composer-right",
-    ".ag-suite-popover",
-    ".ag-suite-footer",
-    ".ag-conv-footer",
-    ".ag-conv-header",
-    ".ag-conv-pane",
-    ".ag-header",
-    ".ag-srv-discord-pane",
-    ".ag-srv-pane-pane",
-    ".ag-srv-mobile-split",
-    ".ag-settings-modal",
-    ".ag-peer-modal",
-    ".ag-sheet",
-    ".ag-info-sheet",
-    ".ag-quick-profile-popover",
-    ".ag-ctx-menu",
-  ].join(",");
-  const observer = new MutationObserver((records) => {
-    if (document.hidden) {
-      scheduleEnhance();
-      return;
-    }
-    let relevant = false;
-    let urgentCallUi = false;
-    for (const record of records) {
-      if (record.type === "childList") {
-        const target = record.target;
-        const row = target instanceof Element ? target.closest(".ag-msg-row") : null;
+const INTERNAL_EVENT_KINDS = new Set([25050, 25051, 25052, 25053, 25054, 25055, 25058, 25059, 30078]);
+
+const PAGE_RELEVANT_SELECTOR = [
+  ".ag-msg-row",
+  ".ag-msg-actions",
+  ".ag-msg-head",
+  ".ag-app-rail",
+  ".ag-bitchat-drawer",
+  ".ag-bitchat-quickbar",
+  ".ag-bitchat-globe-stage",
+  ".ag-suite-footer",
+  ".ag-toast-stack",
+  ".ag-toast",
+  ".ag-rail-srv",
+  ".ag-srv-mobile-rail",
+  ".ag-mobile-tabbar",
+  ".ag-composer-dock",
+  ".ag-composer-right",
+  ".ag-suite-popover",
+  ".ag-suite-footer",
+  ".ag-conv-footer",
+  ".ag-conv-header",
+  ".ag-conv-pane",
+  ".ag-header",
+  ".ag-srv-discord-pane",
+  ".ag-srv-pane-pane",
+  ".ag-srv-mobile-split",
+  ".ag-settings-modal",
+  ".ag-peer-modal",
+  ".ag-sheet",
+  ".ag-info-sheet",
+  ".ag-quick-profile-popover",
+  ".ag-ctx-menu",
+].join(",");
+
+function ensureRowObserver() {
+  if (!state.pageObserver) return;
+  if (state.rowObserverRoot?.isConnected) return;
+  const now = performance.now();
+  if (now - (state.lastRowObserverProbe || 0) < 500) return;
+  state.lastRowObserverProbe = now;
+  const sample = document.querySelector(".ag-msg-row");
+  const root = sample?.parentElement;
+  if (!root) {
+    state.rowObserver?.disconnect();
+    state.rowObserver = null;
+    state.rowObserverRoot = null;
+    return;
+  }
+  if (state.rowObserverRoot === root) return;
+  state.rowObserver?.disconnect();
+  state.rowObserverRoot = root;
+  state.rowObserver = new MutationObserver(handlePageMutations);
+  state.rowObserver.observe(root, { attributes: true, attributeFilter: ["class"], subtree: true });
+}
+
+function handlePageMutations(records) {
+  if (document.hidden) {
+    scheduleEnhance();
+    return;
+  }
+  let relevant = false;
+  let urgentCallUi = false;
+  for (const record of records) {
+    if (record.type === "childList") {
+      const target = record.target;
+      if (target instanceof Element && target.closest(".flairFx, .ba-flair-layer, .flairScan")) continue;
+      const row = target instanceof Element ? target.closest(".ag-msg-row") : null;
+      if (row && !repairRowNow(row)) {
+        markRowDirty(row);
+        delete row.dataset.baDecorated;
+        relevant = true;
+      }
+      if (target instanceof Element && target.closest(".ag-users-row")) repairPeopleBadges();
+      const removedNodes = record.removedNodes.length ? new Set(record.removedNodes) : null;
+      for (const node of [...record.addedNodes, ...record.removedNodes]) {
+        if (!(node instanceof Element)) continue;
+        const removed = !!removedNodes?.has(node);
+        if (removed) {
+          markFlairJoinsDirty();
+          if (node.matches(".ag-msg-row")) unobserveFlairRow(node);
+          else if (node.querySelector(".ag-msg-row")) {
+            for (const removedRow of node.querySelectorAll(".ag-msg-row")) unobserveFlairRow(removedRow);
+          }
+        }
+        if (!removed && !node.closest(".ag-msg-row")) {
+          if (node.matches(".ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name")) {
+            repairPeopleBadges();
+          }
+          if (
+            node.matches(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section") ||
+            node.querySelector(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section")
+          ) {
+            syncSettingsIntegration();
+          }
+        }
+        if (!removed) {
+          if (node.matches(".fmtObf") || node.querySelector(".fmtObf")) state.obfNextScan = 0;
+          if (node.matches(".ag-msg-row")) {
+            markRowDirty(node);
+            markFlairJoinsDirty();
+          } else if (!node.closest(".ag-msg-row") && node.querySelector(".ag-msg-row")) {
+            markFlairJoinsDirty();
+            for (const addedRow of node.querySelectorAll(".ag-msg-row")) markRowDirty(addedRow);
+          }
+        }
+        if (node.matches(PAGE_RELEVANT_SELECTOR) || node.querySelector(PAGE_RELEVANT_SELECTOR)) {
+          relevant = true;
+          if (
+            node.matches(".ag-sheet, .ag-info-sheet, .ag-ctx-menu, .ag-peer-modal") ||
+            node.querySelector(".ag-sheet, .ag-info-sheet, .ag-ctx-menu, .ag-peer-modal")
+          ) {
+            urgentCallUi = true;
+          }
+          break;
+        }
+      }
+    } else if (record.type === "attributes") {
+      const el = record.target;
+      if (el instanceof Element) {
+        const row = el.closest(".ag-msg-row");
         if (row) {
-          if (!repairRowNow(row)) {
-            delete row.dataset.baDecorated;
-            relevant = true;
-          }
-        }
-        if (target instanceof Element && target.closest(".ag-users-row")) repairPeopleBadges();
-        for (const node of [...record.addedNodes, ...record.removedNodes]) {
-          if (!(node instanceof Element)) continue;
-          if (!node.closest(".ag-msg-row")) {
-            if (node.matches(".ag-users-row, .ag-users-name") || node.querySelector(".ag-users-row, .ag-users-name")) {
-              repairPeopleBadges();
-            }
-            if (
-              node.matches(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section") ||
-              node.querySelector(".ag-settings-modal, .ag-set-nav-list, .ag-set-nav-item, .ag-set-detail-body, .ag-set-detail-title, .ag-set-mobile-section")
-            ) {
-              syncSettingsIntegration();
-            }
-          }
-          if (node.matches(relevantSelector) || node.querySelector(relevantSelector)) {
-            relevant = true;
-            if (
-              node.matches(".ag-sheet, .ag-info-sheet, .ag-ctx-menu, .ag-peer-modal") ||
-              node.querySelector(".ag-sheet, .ag-info-sheet, .ag-ctx-menu, .ag-peer-modal")
-            ) {
-              urgentCallUi = true;
-            }
-            break;
-          }
-        }
-      } else if (record.type === "attributes") {
-        const el = record.target;
-        if (el instanceof Element) {
-          const row = el.closest(".ag-msg-row");
-          if (row && repairRowNow(row)) {
+          if (repairRowNow(row)) {
             // The row was intact or has just been repaired. Hover/action class
             // churn does not need a second, full enhance pass.
             continue;
           }
-        }
-        if (
-          el === document.documentElement ||
-          el === document.body ||
-          (el instanceof Element && (el.matches(relevantSelector) || el.closest(relevantSelector)))
-        ) {
-          relevant = true;
+          markRowDirty(row);
         }
       }
-      if (relevant) break;
+      if (
+        el === document.documentElement ||
+        el === document.body ||
+        (el instanceof Element && (el.matches(PAGE_RELEVANT_SELECTOR) || el.closest(PAGE_RELEVANT_SELECTOR)))
+      ) {
+        relevant = true;
+      }
     }
-    if (!relevant) return;
-    if (urgentCallUi) {
-      applyCallButtons();
-      hideCallUi();
-      removeCallMenuItems();
-    }
-    scheduleEnhance();
-    scheduleSettingsSync();
-    if (state.settings.privacy.calls.disable && state.settings.privacy.calls.hideUi) removeCallMenuItems();
-  });
+    if (relevant) break;
+  }
+  ensureRowObserver();
+  if (!relevant) return;
+  if (urgentCallUi) {
+    applyCallButtons();
+    hideCallUi();
+    removeCallMenuItems();
+  }
+  scheduleEnhance();
+  scheduleSettingsSync();
+  if (state.settings.privacy.calls.disable && state.settings.privacy.calls.hideUi) removeCallMenuItems();
+}
+
+function observePage() {
+  const observer = new MutationObserver(handlePageMutations);
   state.pageObserver = observer;
   state.pageObserverStart = () => {
     try {
-      observer.observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ["class"],
-      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
     } catch {}
+    ensureRowObserver();
   };
   state.pageObserverStart();
   scheduleEnhance();
@@ -6082,6 +6368,8 @@ async function init() {
     if (JSON.stringify(incoming) === JSON.stringify(state.settings)) return;
     state.settings = incoming;
     state.settingsEpoch += 1;
+    markRowsAllDirty();
+    markFlairJoinsDirty();
     writeSettingsBackup(state.settings);
     if (!state.enabledReady || state.settings.enabled === false) return;
     syncInputs();
@@ -6163,6 +6451,9 @@ async function init() {
     if (document.hidden) {
       state.enhancePending = true;
       state.pageObserver?.disconnect();
+      state.rowObserver?.disconnect();
+      state.rowObserverRoot = null;
+      state.lastRowObserverProbe = 0;
       return;
     }
     state.pageObserverStart?.();
@@ -6179,6 +6470,7 @@ async function init() {
     }).observe(titleEl, { childList: true, characterData: true, subtree: true });
   }
   window.addEventListener("resize", () => {
+    markFlairJoinsDirty();
     scheduleEnhance();
     if (state.emojiAnchor) positionEmojiPicker(state.emojiAnchor);
   }, { passive: true });
@@ -6209,8 +6501,8 @@ async function init() {
     }
     releaseNativeSounds();
   });
-  window.setInterval(tickObfuscation, 100);
-  window.setInterval(flairTickerTick, 1500);
+  window.setInterval(tickObfuscation, 250);
+  window.setInterval(flairTickerTick, 1800);
   ensureHost();
   observePage();
   observeChatLabels();
