@@ -4211,6 +4211,8 @@ function rowDecorationIntact(row, ev) {
     if (!row.classList.contains("flair")) return false;
     if (!row.classList.contains(`flair-${row.dataset.baFlair}`)) return false;
     if (!row.querySelector(":scope > .ba-flair-layer")) return false;
+    if (flairHasFx(row.dataset.baFlair) && !row.querySelector(":scope > .flairFx")) return false;
+    if (flairOverlayInner(row.dataset.baFlair) && !row.querySelector(":scope > .ba-flair-layer > .flairScan")) return false;
     try {
       const expected = JSON.parse(row.dataset.baFlairVars || "{}");
       for (const [key, value] of Object.entries(expected)) {
