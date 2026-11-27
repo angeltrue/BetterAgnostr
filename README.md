@@ -46,7 +46,7 @@ A browser extension for **agnostr.com**: line and flair studio, client tags, pri
 
 1. Run `npm install` and `node build.mjs`.
 2. Firefox: open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → select `dist/manifest.json`.
-3. Chromium 148+: open `chrome://extensions`, enable **Developer mode**, and load `release/better-agnostr-1.3.8-chromium.zip` unpacked.
+3. Chromium 148+: open `chrome://extensions`, enable **Developer mode**, and load `release/better-agnostr-1.3.9-chromium.zip` unpacked.
 4. Open or reload <https://agnostr.com/>.
 
 Firefox 128 or newer is required. The unsigned XPI is in `release/`; permanent Firefox installation requires AMO signing.
