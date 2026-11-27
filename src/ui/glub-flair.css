@@ -2523,15 +2523,17 @@ html.retro .flairScan {
 }
 .ag-msg-row > .ba-flair-layer {
   position: absolute !important;
-  inset: 0 !important;
+  /* Let animated effects continue past the row and fade in the gap, instead of
+     being clipped at the row edge mid-animation. */
+  inset: -10px 0 !important;
   display: block;
   overflow: hidden !important;
   pointer-events: none;
   z-index: 0;
   border-radius: inherit;
   /* Soften the top and bottom edge where a row's flair meets the next one. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 4px, #000 calc(100% - 4px), transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 4px, #000 calc(100% - 4px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
 }
 
 /* Stars need a field that scales with the row instead of two fixed bands. */

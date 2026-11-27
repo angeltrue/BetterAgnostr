@@ -2,6 +2,13 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.3 — animated flair edges
+
+- Let flaired layers extend beyond the message row and fade over a wider band in the gap, so animated particles, curtains, embers, rain, and shooting stars are no longer clipped mid-animation at the row edge.
+- Kept the full effect opaque across the actual row and moved the fade into the space between rows.
+- Corrected shooting-star positioning for the taller flair layer.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.2 — scalable flairs and seamless rows
 
 - Rebuilt the stars flair as a repeating starfield that fills any row height, including image and long-message rows, instead of stopping after two bands.

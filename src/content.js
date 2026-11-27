@@ -2117,11 +2117,11 @@ function shootStar(el, delay = 0) {
   const row = layer?.closest(".ag-msg-row") || layer;
   if (!layer || !row) return;
   const line = row.querySelector(".ag-msg-rich") || row.querySelector(".ag-msg-content") || row;
-  const rowRect = row.getBoundingClientRect();
+  const layerRect = layer.getBoundingClientRect();
   const lineRect = line.getBoundingClientRect();
-  const offsetX = Math.max(0, lineRect.left - rowRect.left);
-  const offsetY = Math.max(0, lineRect.top - rowRect.top);
-  const w = Math.max(60, rowRect.width - offsetX - 4);
+  const offsetX = Math.max(0, lineRect.left - layerRect.left);
+  const offsetY = Math.max(0, lineRect.top - layerRect.top);
+  const w = Math.max(60, layerRect.width - offsetX - 4);
   const h = Math.max(12, lineRect.height);
   const star = document.createElement("span");
   star.className = "ba-shooting-star";
