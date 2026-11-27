@@ -1146,6 +1146,10 @@ function applyUiPreferences() {
     "ba-hide-notification-button",
     state.settings.appearance?.hideNotificationButton === true,
   );
+  document.documentElement.classList.toggle(
+    "ba-hide-voice-memo",
+    state.settings.privacy.removeVoiceMemo !== false,
+  );
 }
 
 function applyTheme() {
@@ -4298,10 +4302,12 @@ function applyVoiceMemoVisibility(docks) {
   const remove = state.settings.privacy.removeVoiceMemo !== false;
   const buttons = docks
     ? [...docks].flatMap((dock) =>
-        dock.querySelectorAll('button[aria-label*="voice memo" i], button[title*="voice memo" i]'),
+        dock.querySelectorAll(
+          '.ag-composer-right > button[aria-label*="voice memo" i], .ag-composer-right > button[title*="voice memo" i]',
+        ),
       )
     : document.querySelectorAll(
-        '.ag-composer-dock button[aria-label*="voice memo" i], .ag-composer-dock button[title*="voice memo" i]',
+        '.ag-composer-dock .ag-composer-right > button[aria-label*="voice memo" i], .ag-composer-dock .ag-composer-right > button[title*="voice memo" i]',
       );
   for (const btn of buttons) {
     if (!(btn instanceof HTMLElement)) continue;
@@ -6508,6 +6514,10 @@ async function init() {
     document.documentElement.classList.toggle(
       "ba-hide-notification-button",
       state.settings.appearance.hideNotificationButton === true,
+    );
+    document.documentElement.classList.toggle(
+      "ba-hide-voice-memo",
+      state.settings.privacy.removeVoiceMemo !== false,
     );
   }
   state.activeTab = state.settings.ui.activeTab || "studio";

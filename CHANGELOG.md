@@ -2,6 +2,13 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.4.5 — voice memo button hotfix
+
+- The “Remove voice memo” setting now hides the composer’s voice-memo launcher through a root CSS class, so it survives React re-rendering and applies whenever the composer appears.
+- Scoped hiding to `.ag-composer-right > button` so the recorder’s own send, cancel and discard controls are not affected.
+- Kept the previous inline hide/restore path for immediate removal and for switching the setting back off.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.4.4 — fire ash motion hotfix
 
 - Fire ash is now rendered as 10–12 independent spans instead of one box-shadow field. Every ash speck gets its own duration, phase delay, lift height and drift path, so the particles no longer rise in lockstep.

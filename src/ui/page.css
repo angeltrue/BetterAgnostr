@@ -1417,6 +1417,13 @@ html.ba-hide-notification-button .ag-mtab-btn[aria-label*="Notification" i] {
   display: none !important;
 }
 
+/* Hide the composer's voice-memo launcher without touching the recorder's own
+   send/cancel controls. A root class survives React replacing the button. */
+html.ba-hide-voice-memo .ag-composer-right > button[aria-label*="voice memo" i],
+html.ba-hide-voice-memo .ag-composer-right > button[title*="voice memo" i] {
+  display: none !important;
+}
+
 /* Agnostr now places the message action toolbar in the row's flex flow next to
    the text. Restore the previous fixed top-right overlay so it does not move with
    message width, wrapping, or avatars. */
