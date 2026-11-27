@@ -2,6 +2,16 @@
 
 All notable changes to Better Agnostr are documented here.
 
+## 1.3.7 — flair overlap and visibility fixes
+
+- Rain in a same-flair run now continues through the next message instead of resetting at each boundary.
+- Aurora FX is constrained to its row/run bleed instead of extending across neighbouring messages.
+- Neon frames no longer fade at the ends and keep one shared tube color across joined rows.
+- Star band density scales down on short messages and up on tall ones.
+- Fire ash particles are larger, brighter, and remain visible longer before fading.
+- People-list BA badges are repaired synchronously by a targeted observer, so they stop flickering in and out.
+- Kept Firefox and Chromium downloads in one release entry.
+
 ## 1.3.6 — flair polish, concrete badges, instant settings
 
 - Rain now continues through the next message in a same-flair run, so drops no longer stop at every row boundary.

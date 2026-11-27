@@ -369,11 +369,11 @@ html[data-ba-rainbow="bright"],
 
 .flair-fire::after {
 	left: var(--ash-left, 20px);
-	top: 100%;
-	width: 2px;
-	height: 2px;
+	top: calc(100% - 8px);
+	width: 3px;
+	height: 3px;
 	border-radius: 50%;
-	background: #8a7f77;
+	background: #d8a06a;
 	box-shadow: var(--ash-field, 40px 0 #6d635c, 96px 0 #b9a89a, 158px 0 #c9762f, 226px 0 #7d726a);
 	animation: flairAshRise var(--ash-dur, 5.5s) linear var(--ash-delay, 0s) infinite;
 }
@@ -483,20 +483,20 @@ html[data-ba-rainbow="bright"],
 		animation-timing-function: ease-in-out;
 	}
 	20% {
-		opacity: 0.42;
+		opacity: 0.75;
 		animation-timing-function: ease-in-out;
 	}
 	42% {
 		transform: translate3d(var(--ash-x1, -4px), -0.5em, 0);
-		opacity: 0.32;
+		opacity: 0.56;
 		animation-timing-function: ease-in-out;
 	}
 	60% {
 		transform: translate3d(var(--ash-x2, 6px), -0.95em, 0);
-		opacity: 0.18;
+		opacity: 0.3;
 		animation-timing-function: ease-in-out;
 	}
-	74% {
+	76% {
 		transform: translate3d(var(--ash-x3, -3px), -1.3em, 0);
 		opacity: 0;
 	}
@@ -1205,7 +1205,7 @@ html.retro .flairScan {
 }
 
 .flair-aurora > .flairFx {
-	inset: -58% -7% -16%;
+	inset: calc(-1 * var(--ba-flair-bleed-top, 0px)) 0 calc(-1 * var(--ba-flair-bleed-bottom, 0px));
 	opacity: 1;
 	overflow: hidden;
 	mix-blend-mode: screen;
@@ -2619,6 +2619,11 @@ html.retro .flairScan {
 }
 
 /* Stars need a field that scales with the row instead of two fixed bands. */
+.ag-msg-row > .ba-flair-layer.flair-neon {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
 .ag-msg-row > .ba-flair-layer.flair-stars {
   -webkit-mask-image: none;
   mask-image: none;
